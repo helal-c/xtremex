@@ -38,6 +38,11 @@ import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.json.JSONArray
+import android.content.res.Configuration
+import android.content.pm.ActivityInfo
+import android.widget.ImageView
+import android.widget.Button
+import com.xtremex.tv.auth.AccessController
 
 class MainActivity : AppCompatActivity() {
     private enum class GuideKind { ALL, FAVORITES, RECENT, CATEGORY }
@@ -46,6 +51,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
     private lateinit var infoBox: LinearLayout
+    private lateinit var touchControls: LinearLayout
+    private lateinit var channelLogo: ImageView
     private lateinit var numberText: TextView
     private lateinit var nameText: TextView
     private lateinit var metaText: TextView
@@ -57,6 +64,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var numberEntry: TextView
     private lateinit var adapter: ChannelAdapter
+    private lateinit var signupView: SignupView
+    private lateinit var access: AccessController
+    private var activeDialog: AlertDialog? = null
+    private val tuneGuard = TuneGuard()
+    private val isTv: Boolean get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    private val portraitMobile: Boolean get() = !isTv && resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
     private val handler = Handler(Looper.getMainLooper())
     private val repository by lazy { PlaylistRepository(this) }
@@ -75,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private var recent = mutableListOf<String>()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    private val hideTouchControls = Runnable { touchControls.visibility = View.GONE }
     private val hideInfo = Runnable { infoBox.visibility = View.GONE }
     private val hideStatus = Runnable { status.visibility = View.GONE }
     private val tuneNumber = Runnable {
@@ -93,6 +107,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (isTv) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -104,11 +119,26 @@ class MainActivity : AppCompatActivity() {
 
         buildUi()
         buildPlayer()
+        access = AccessController(this, if (isTv) "tv" else "mobile", { ::player.isInitialized && player.isPlaying }) { state, support, allowed ->
+            if (allowed) {
+                signupView.visibility = View.GONE
+                if (channels.isNotEmpty()) {
+                    if (firstPlayPending || player.mediaItemCount == 0) { firstPlayPending = false; tune(currentIndex) }
+                    else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
+                    if (portraitMobile) showGuide()
+                }
+            } else {
+                tuneGuard.next()
+                player.stop()
+                signupView.visibility = View.VISIBLE
+                signupView.render(state, support, access.userId)
+            }
+        }
 
         adapter = ChannelAdapter(
             onSelected = { index ->
                 tune(index)
-                hideGuide()
+                if (!portraitMobile) hideGuide()
             },
             onFavorite = { index -> toggleFavorite(index) },
         )
@@ -158,17 +188,19 @@ class MainActivity : AppCompatActivity() {
                 .apply { setMargins(dp(28), dp(28), 0, 0) }
         )
 
-        numberText = text(14, Color.rgb(244, 196, 93), true)
+        numberText = text(14, Color.rgb(238, 51, 78), true)
         nameText = text(25, Color.WHITE, true).apply {
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         metaText = text(13, Color.rgb(138, 150, 168), false)
+        channelLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Channel logo" }
+        infoBox.addView(channelLogo, LinearLayout.LayoutParams(dp(64), dp(48)))
         infoBox.addView(numberText)
         infoBox.addView(nameText)
         infoBox.addView(metaText)
 
-        numberEntry = text(30, Color.rgb(244, 196, 93), true).apply {
+        numberEntry = text(30, Color.rgb(238, 51, 78), true).apply {
             background = panelDrawable()
             setPadding(dp(18), dp(10), dp(18), dp(10))
             visibility = View.GONE
@@ -193,7 +225,7 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams(dp(500), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END)
         )
 
-        guideTitle = text(17, Color.rgb(244, 196, 93), true)
+        guideTitle = text(17, Color.rgb(238, 51, 78), true)
         guide.addView(guideTitle)
 
         guideHint = text(11, Color.rgb(138, 150, 168), false)
@@ -248,7 +280,77 @@ class MainActivity : AppCompatActivity() {
             ).apply { setMargins(dp(22), 0, 0, dp(22)) }
         )
 
+        touchControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            background = panelDrawable()
+        }
+        fun control(label: String, action: () -> Unit) {
+            touchControls.addView(Button(this).apply { text = label; setOnClickListener { action(); revealControls() } })
+        }
+        if (!isTv) {
+            control("CH −") { if (channels.isNotEmpty()) tune((currentIndex - 1 + channels.size) % channels.size) }
+            control("CH +") { if (channels.isNotEmpty()) tune((currentIndex + 1) % channels.size) }
+        }
+        control("Menu") { showReceiverMenu() }
+        root.addView(touchControls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        playerView.setOnClickListener { if (isTv) showReceiverMenu() else revealControls() }
+        revealControls()
+        guideTitle.setOnClickListener { cycleGuide(1) }
+        signupView = SignupView(this, { access.register(it) }, { access.retry() })
+        root.addView(signupView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
         setContentView(root)
+        updateLayout()
+    }
+
+    private fun revealControls() {
+        touchControls.visibility = View.VISIBLE
+        handler.removeCallbacks(hideTouchControls)
+        handler.postDelayed(hideTouchControls, 5000)
+    }
+
+    private fun updateLayout() {
+        val width = resources.displayMetrics.widthPixels
+        val height = resources.displayMetrics.heightPixels
+        playerView.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, if (portraitMobile) width * 9 / 16 else ViewGroup.LayoutParams.MATCH_PARENT)
+        guide.layoutParams = FrameLayout.LayoutParams(if (portraitMobile) width else minOf(dp(500), width),
+            if (portraitMobile) maxOf(dp(100), height - width * 9 / 16) else ViewGroup.LayoutParams.MATCH_PARENT,
+            if (portraitMobile) Gravity.BOTTOM else Gravity.END)
+        infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(650), maxOf(dp(100), width - dp(56))), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply { setMargins(dp(28), dp(28), 0, 0) }
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        updateLayout()
+        if (portraitMobile && ::access.isInitialized && access.canPlay()) showGuide()
+    }
+    private fun showReceiverMenu() {
+        if (!::access.isInitialized || !access.canPlay()) return
+        val labels = arrayOf("All channels", "Favorites", "Recent", "Categories", "Search", "Favorite current channel", "Previous channel", "Refresh channels", "Check update", "Full screen / Auto rotate", "Exit")
+        activeDialog = AlertDialog.Builder(this).setTitle("XtremeX TV").setItems(labels) { _, choice ->
+            when (choice) {
+                0 -> showGuide(GuideKind.ALL)
+                1 -> showGuide(GuideKind.FAVORITES)
+                2 -> showGuide(GuideKind.RECENT)
+                3 -> showCategories()
+                4 -> { showGuide(); search.requestFocus(); showKeyboard() }
+                5 -> toggleFavorite(currentIndex)
+                6 -> if (previousIndex >= 0) tune(previousIndex)
+                7 -> refreshPlaylist(true)
+                8 -> updater.check(true)
+                9 -> if (!isTv) requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                10 -> finishAffinity()
+            }
+        }.create().apply { setOnDismissListener { activeDialog = null }; show() }
+    }
+
+    private fun showCategories() {
+        val categories = guideModes.withIndex().filter { it.value.kind == GuideKind.CATEGORY }
+        if (categories.isEmpty()) { showGuide(GuideKind.ALL); return }
+        activeDialog = AlertDialog.Builder(this).setTitle("Categories")
+            .setItems(categories.map { it.value.label }.toTypedArray()) { _, choice ->
+                guideModeIndex = categories[choice].index
+                showGuide()
+            }.create().apply { setOnDismissListener { activeDialog = null }; show() }
     }
 
     private fun buildPlayer() {
@@ -286,6 +388,7 @@ class MainActivity : AppCompatActivity() {
         playerView.player = player
 
         player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (::access.isInitialized) access.heartbeat() }
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
                     Player.STATE_BUFFERING -> showStatus("Connecting…")
@@ -301,10 +404,12 @@ class MainActivity : AppCompatActivity() {
                 if (sourceIndex + 1 < channel.sources.size) {
                     sourceIndex += 1
                     showStatus("Primary unavailable • trying backup " + sourceIndex)
-                    handler.postDelayed({ playCurrentSource() }, 300)
+                    val retry = tuneGuard.next()
+                    handler.postDelayed({ if (tuneGuard.valid(retry)) playCurrentSource() }, 300)
                 } else {
                     showStatus("Signal unavailable • retrying")
-                    handler.postDelayed({ retryFromPrimary() }, 2_500)
+                    val retry = tuneGuard.next()
+                    handler.postDelayed({ if (tuneGuard.valid(retry)) retryFromPrimary() }, 2_500)
                 }
             }
         })
@@ -328,6 +433,8 @@ class MainActivity : AppCompatActivity() {
         if (newChannels.isEmpty()) return
 
         val playingId = channels.getOrNull(currentIndex)?.id
+        val selection = reconcileSelection(PlaybackSelection(playingId, channels.getOrNull(previousIndex)?.id,
+            channels.getOrNull(currentIndex)?.sources?.getOrNull(sourceIndex)), newChannels)
         channels = newChannels
         rebuildModes()
 
@@ -344,16 +451,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        previousIndex = channels.indexOfFirst { it.id == selection.previousId }
+        sourceIndex = channels.getOrNull(currentIndex)?.sources?.indexOf(selection.source)?.takeIf { it >= 0 } ?: 0
+        if (playingId != null && selection.retune) {
+            tuneGuard.next()
+            if (::access.isInitialized && access.canPlay()) playCurrentSource()
+        }
+
         rebuildGuide(keepFocus = false)
 
-        if (autoplay && firstPlayPending) {
+        if (autoplay && firstPlayPending && ::access.isInitialized && access.canPlay()) {
             firstPlayPending = false
             tune(currentIndex)
         }
     }
 
     private fun tune(index: Int) {
-        if (channels.isEmpty()) return
+        if (channels.isEmpty() || !::access.isInitialized || !access.canPlay()) return
 
         val next = ((index % channels.size) + channels.size) % channels.size
         if (next != currentIndex) previousIndex = currentIndex
@@ -372,6 +486,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playCurrentSource() {
+        if (!::access.isInitialized || !access.canPlay()) return
+        tuneGuard.next()
         val channel = channels.getOrNull(currentIndex) ?: return
         val source = channel.sources.getOrNull(sourceIndex) ?: channel.primarySource
 
@@ -396,9 +512,10 @@ class MainActivity : AppCompatActivity() {
         val channel = channels.getOrNull(currentIndex) ?: return
         numberText.text = "%03d".format(currentIndex + 1)
         nameText.text = channel.name
+        ChannelLogo.show(channelLogo, channel.logo)
 
         val source = channel.sources.getOrNull(sourceIndex) ?: channel.primarySource
-        val sourceLabel = if (source.startsWith("http:")) "BDIX / HTTP" else "LIVE"
+        val sourceLabel = if (source.startsWith("http:")) "HTTP" else "LIVE"
         val backupLabel = if (channel.sources.size > 1) {
             " • " + channel.sources.size + " sources"
         } else {
@@ -540,9 +657,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (activeDialog?.isShowing == true || updater.isShowingDialog || !window.decorView.hasWindowFocus()) return super.dispatchKeyEvent(event)
+        if (::signupView.isInitialized && signupView.visibility == View.VISIBLE) return super.dispatchKeyEvent(event)
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
 
         if (guide.visibility == View.VISIBLE) {
+            if (search.hasFocus() && event.keyCode != KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
             when (event.keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
                     if (search.hasFocus()) {
@@ -615,7 +735,7 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_NUMPAD_ENTER,
             KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_GUIDE -> {
-                showGuide()
+                showReceiverMenu()
                 return true
             }
 
@@ -660,7 +780,7 @@ class MainActivity : AppCompatActivity() {
 
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
             KeyEvent.KEYCODE_SPACE -> {
-                if (player.isPlaying) player.pause() else player.play()
+                if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
                 showInfo()
                 return true
             }
@@ -680,12 +800,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun confirmExit() {
-        AlertDialog.Builder(this)
+        activeDialog = AlertDialog.Builder(this)
             .setTitle("Exit XtremeX TV?")
             .setMessage("Current channel will be remembered for next launch.")
             .setPositiveButton("Exit") { _, _ -> finishAffinity() }
             .setNegativeButton("Keep watching", null)
-            .show()
+            .create().apply { setOnDismissListener { activeDialog = null }; show() }
     }
 
     private fun showKeyboard() {
@@ -764,11 +884,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updater.onResume()
-        if (::player.isInitialized && channels.isNotEmpty() && !player.isPlaying) player.play()
+        if (::access.isInitialized) access.start()
     }
 
     override fun onStop() {
         super.onStop()
+        updater.onStop()
+        if (::access.isInitialized) access.stop()
         if (::player.isInitialized) player.pause()
     }
 
@@ -778,6 +900,7 @@ class MainActivity : AppCompatActivity() {
         if (::player.isInitialized) player.release()
         repository.close()
         updater.close()
+        if (::access.isInitialized) access.close()
         super.onDestroy()
     }
 }

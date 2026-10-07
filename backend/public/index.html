@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>XtremeX TV · Admin</title>
+  <link rel="stylesheet" href="/admin.css"><script src="/admin.js" defer></script>
+</head>
+<body>
+  <header><div class="brand"><span>Xtreme</span>X <small>TV CONTROL</small></div><button id="logout" hidden>Sign out</button></header>
+  <main>
+    <section id="login" class="login-box">
+      <p class="eyebrow">OWNER ACCESS</p><h1>Your TV network,<br>under your control.</h1>
+      <p class="muted">Approve devices, manage access and see app activity.</p>
+      <form id="login-form"><label for="password">Admin password</label><input id="password" type="password" autocomplete="current-password" required maxlength="512"><button class="primary" type="submit">Sign in</button></form>
+    </section>
+    <p id="message" role="status" aria-live="polite"></p>
+    <div id="panel" hidden>
+      <div class="heading"><div><p class="eyebrow">XTREMEX TV</p><h1>Overview</h1></div><button id="refresh">Refresh</button></div>
+      <section id="metrics" class="metrics" aria-label="Usage overview"></section>
+      <p class="muted">Online: heartbeat within 2 minutes. Watch time is an estimate. Today's activity uses Bangladesh time.</p>
+      <nav aria-label="Admin sections"><button data-tab="users" class="selected">Users</button><button data-tab="audit">Activity log</button><button data-tab="settings">Settings</button></nav>
+      <section id="users">
+        <form id="filters" class="filters"><label for="search" class="sr-only">Search user ID</label><input id="search" placeholder="Search user ID" maxlength="32"><label for="filter-status" class="sr-only">Status</label><select id="filter-status"><option value="">All users</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="blocked">Blocked</option></select><button type="submit">Search</button></form>
+        <p id="user-count" class="muted"></p><div id="account-list" class="accounts"></div>
+        <div class="pagination"><button id="previous">Previous</button><span id="page"></span><button id="next">Next</button></div>
+      </section>
+      <section id="audit" hidden><h2>Admin activity</h2><div id="audit-list"></div></section>
+      <section id="settings" hidden><h2>App support</h2><p class="muted">This number appears on Pending and Blocked screens.</p><form id="settings-form"><label for="support">Support number</label><input id="support" type="tel" maxlength="32" placeholder="Enter your support number"><button class="primary">Save settings</button></form></section>
+    </div>
+  </main>
+  <footer>Xtreme’x Communication Solutions</footer>
+</body>
+</html>

@@ -68,7 +68,7 @@ class ChannelAdapter(
         }
 
         val number = TextView(context).apply {
-            setTextColor(Color.rgb(244, 196, 93))
+            setTextColor(Color.WHITE)
             textSize = 14f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
@@ -85,7 +85,7 @@ class ChannelAdapter(
         val status = TextView(context).apply {
             gravity = Gravity.CENTER
             textSize = 12f
-            setTextColor(Color.rgb(66, 233, 167))
+            setTextColor(Color.rgb(238, 51, 78))
         }
         row.addView(status, LinearLayout.LayoutParams(dp(context, 72), ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -102,7 +102,7 @@ class ChannelAdapter(
         holder.status.text = when {
             favorite -> "★"
             channel.sources.size > 1 -> "+" + (channel.sources.size - 1)
-            channel.hasBdixSource -> "BDIX"
+            channel.hasBdixSource -> "HTTP"
             else -> ""
         }
 
@@ -131,13 +131,13 @@ class ChannelAdapter(
 
     private fun rowBackground(focused: Boolean) = GradientDrawable().apply {
         setColor(
-            if (focused) Color.argb(170, 20, 68, 58)
+            if (focused) Color.argb(210, 75, 15, 30)
             else Color.argb(170, 11, 17, 27)
         )
         cornerRadius = 12f
         setStroke(
             if (focused) 2 else 1,
-            if (focused) Color.rgb(66, 233, 167) else Color.argb(38, 255, 255, 255)
+            if (focused) Color.rgb(238, 51, 78) else Color.argb(38, 255, 255, 255)
         )
     }
 
