@@ -17,8 +17,10 @@ class ChannelAdapter(
 
     private var rows: List<ChannelRow> = emptyList()
     private var favorites: Set<String> = emptySet()
+    private var playingIndex = -1
 
-    fun submit(newRows: List<ChannelRow>, favoriteIds: Set<String>) {
+    fun submit(newRows: List<ChannelRow>, favoriteIds: Set<String>, currentIndex: Int) {
+        playingIndex = currentIndex
         rows = newRows
         favorites = favoriteIds
         notifyDataSetChanged()
@@ -59,7 +61,7 @@ class ChannelAdapter(
             setPadding(dp(context, 12), 0, dp(context, 12), 0)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(context, 66)
+                dp(context, 52)
             )
             isFocusable = true
             isClickable = true
@@ -72,11 +74,11 @@ class ChannelAdapter(
             textSize = 14f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
-        row.addView(number, LinearLayout.LayoutParams(dp(context, 62), ViewGroup.LayoutParams.WRAP_CONTENT))
+        row.addView(number, LinearLayout.LayoutParams(dp(context, 40), ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val name = TextView(context).apply {
             setTextColor(Color.WHITE)
-            textSize = 16f
+            textSize = 14f
             isSingleLine = true
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
@@ -87,7 +89,7 @@ class ChannelAdapter(
             textSize = 12f
             setTextColor(Color.rgb(238, 51, 78))
         }
-        row.addView(status, LinearLayout.LayoutParams(dp(context, 72), ViewGroup.LayoutParams.WRAP_CONTENT))
+        row.addView(status, LinearLayout.LayoutParams(dp(context, 32), ViewGroup.LayoutParams.WRAP_CONTENT))
 
         return Holder(row, number, name, status)
     }
@@ -97,8 +99,9 @@ class ChannelAdapter(
         val channel = row.channel
         val favorite = favorites.contains(channel.id)
 
+        holder.number.setTextColor(if (row.globalIndex == playingIndex) Color.rgb(238, 51, 78) else Color.WHITE)
         holder.number.text = "%03d".format(row.globalIndex + 1)
-        holder.name.text = channel.name + "   " + channel.category
+        holder.name.text = channel.name
         holder.status.text = when {
             favorite -> "★"
             channel.sources.size > 1 -> "+" + (channel.sources.size - 1)
