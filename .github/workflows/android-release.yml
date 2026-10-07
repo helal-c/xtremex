@@ -1,0 +1,116 @@
+name: Android TV Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version name, for example 1.0.1"
+        required: true
+        type: string
+      version_code:
+        description: "Increasing integer version code"
+        required: true
+        type: string
+      notes:
+        description: "Release notes"
+        required: false
+        default: "XtremeX TV update"
+        type: string
+      mandatory:
+        description: "Force update prompt"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Verify signing secrets
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          test -n "$KEY_ALIAS"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_PASSWORD"
+
+      - name: Decode signing key
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/xtremex-tv.jks"
+
+      - name: Build signed release APK
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/xtremex-tv.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          APK="XtremeX-TV-v${{ inputs.version_name }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          sha256sum "$APK" | awk '{print $1}' > apk.sha256
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          echo "SHA256=$(cat apk.sha256)" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version_name }}
+          name: XtremeX TV v${{ inputs.version_name }}
+          body: ${{ inputs.notes }}
+          files: |
+            ${{ env.APK }}
+            apk.sha256
+
+      - name: Update OTA metadata
+        shell: bash
+        run: |
+          cat > update.json <<EOF
+          {
+            "versionName": "${{ inputs.version_name }}",
+            "versionCode": ${{ inputs.version_code }},
+            "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v${{ inputs.version_name }}/XtremeX-TV-v${{ inputs.version_name }}.apk",
+            "sha256": "$SHA256",
+            "notes": $(python3 -c 'import json,os; print(json.dumps(os.environ["NOTES"]))'),
+            "mandatory": ${{ inputs.mandatory }}
+          }
+          EOF
+        env:
+          NOTES: ${{ inputs.notes }}
+
+      - name: Commit OTA metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          git commit -m "chore(tv): publish OTA v${{ inputs.version_name }}" || exit 0
+          git push
