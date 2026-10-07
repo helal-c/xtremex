@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -56,6 +57,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var numberText: TextView
     private lateinit var nameText: TextView
     private lateinit var metaText: TextView
+    private lateinit var guideScrim: View
+    private var gestureX = 0f
+    private var gestureY = 0f
+    private var gestureCanOpen = false
     private lateinit var guide: LinearLayout
     private lateinit var guideTitle: TextView
     private lateinit var guideHint: TextView
@@ -82,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var sourceIndex = 0
     private var numericBuffer = ""
     private var firstPlayPending = true
+    private var playbackLayoutStarted = false
     private var guideModes: List<GuideMode> = listOf(GuideMode(GuideKind.ALL, "All"))
     private var guideModeIndex = 0
     private var favorites = linkedSetOf<String>()
@@ -121,11 +127,15 @@ class MainActivity : AppCompatActivity() {
         buildPlayer()
         access = AccessController(this, if (isTv) "tv" else "mobile", { ::player.isInitialized && player.isPlaying }) { state, support, allowed ->
             if (allowed) {
+                if (!playbackLayoutStarted) {
+                    playbackLayoutStarted = true
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
                 signupView.visibility = View.GONE
                 if (channels.isNotEmpty()) {
                     if (firstPlayPending || player.mediaItemCount == 0) { firstPlayPending = false; tune(currentIndex) }
                     else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
-                    if (portraitMobile) showGuide()
+
                 }
             } else {
                 tuneGuard.next()
@@ -138,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         adapter = ChannelAdapter(
             onSelected = { index ->
                 tune(index)
-                if (!portraitMobile) hideGuide()
+                hideGuide()
             },
             onFavorite = { index -> toggleFavorite(index) },
         )
@@ -214,10 +224,18 @@ class MainActivity : AppCompatActivity() {
             ).apply { setMargins(0, dp(28), dp(28), 0) }
         )
 
+        guideScrim = View(this).apply {
+            setBackgroundColor(Color.argb(25, 0, 0, 0))
+            visibility = View.GONE
+            setOnClickListener { hideGuide() }
+        }
+        root.addView(guideScrim, FrameLayout.LayoutParams(-1, -1))
+
         guide = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            setBackgroundColor(Color.argb(245, 7, 12, 19))
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(Color.argb(205, 7, 12, 19))
+            isClickable = true
             visibility = View.GONE
         }
         root.addView(
@@ -226,7 +244,25 @@ class MainActivity : AppCompatActivity() {
         )
 
         guideTitle = text(17, Color.rgb(238, 51, 78), true)
-        guide.addView(guideTitle)
+        val guideHeader = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        guideHeader.addView(guideTitle, LinearLayout.LayoutParams(0, -2, 1f))
+        guideHeader.addView(text(22, Color.WHITE, true).apply {
+            text = "×"; gravity = Gravity.CENTER; contentDescription = "Close channels"
+            setOnClickListener { hideGuide() }
+        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        guide.addView(guideHeader)
+        val tabs = LinearLayout(this)
+        listOf("All" to GuideKind.ALL, "★" to GuideKind.FAVORITES, "Recent" to GuideKind.RECENT).forEach { (label, kind) ->
+            tabs.addView(text(12, Color.WHITE, false).apply {
+                text = label; gravity = Gravity.CENTER; background = panelDrawable()
+                setOnClickListener { setGuideMode(kind) }
+            }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        }
+        tabs.addView(text(12, Color.WHITE, false).apply {
+            text = "Filter"; gravity = Gravity.CENTER; background = panelDrawable()
+            setOnClickListener { showCategories() }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        guide.addView(tabs)
 
         guideHint = text(11, Color.rgb(138, 150, 168), false)
         guide.addView(
@@ -264,7 +300,7 @@ class MainActivity : AppCompatActivity() {
             text = "RED Favorites   GREEN Recent   YELLOW Refresh   BLUE Update"
             gravity = Gravity.CENTER
         }
-        guide.addView(footer)
+        if (isTv) guide.addView(footer)
 
         status = text(13, Color.WHITE, true).apply {
             background = panelDrawable()
@@ -285,16 +321,20 @@ class MainActivity : AppCompatActivity() {
             background = panelDrawable()
         }
         fun control(label: String, action: () -> Unit) {
-            touchControls.addView(Button(this).apply { text = label; setOnClickListener { action(); revealControls() } })
+            touchControls.addView(Button(this).apply { text = label; textSize = 12f; minWidth = 0; minimumWidth = 0; setPadding(dp(8), 0, dp(8), 0); setOnClickListener { action(); revealControls() } })
         }
         if (!isTv) {
             control("CH −") { if (channels.isNotEmpty()) tune((currentIndex - 1 + channels.size) % channels.size) }
             control("CH +") { if (channels.isNotEmpty()) tune((currentIndex + 1) % channels.size) }
         }
+        control("Channels") { showGuide() }
+        if (!isTv) control("⛶") {
+            requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
         control("Menu") { showReceiverMenu() }
-        root.addView(touchControls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        root.addView(touchControls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(16) })
+        touchControls.visibility = View.GONE
         playerView.setOnClickListener { if (isTv) showReceiverMenu() else revealControls() }
-        revealControls()
         guideTitle.setOnClickListener { cycleGuide(1) }
         signupView = SignupView(this, { access.register(it) }, { access.retry() })
         root.addView(signupView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -304,6 +344,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun revealControls() {
+        if (guide.visibility == View.VISIBLE) return
         touchControls.visibility = View.VISIBLE
         handler.removeCallbacks(hideTouchControls)
         handler.postDelayed(hideTouchControls, 5000)
@@ -311,17 +352,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateLayout() {
         val width = resources.displayMetrics.widthPixels
-        val height = resources.displayMetrics.heightPixels
-        playerView.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, if (portraitMobile) width * 9 / 16 else ViewGroup.LayoutParams.MATCH_PARENT)
-        guide.layoutParams = FrameLayout.LayoutParams(if (portraitMobile) width else minOf(dp(500), width),
-            if (portraitMobile) maxOf(dp(100), height - width * 9 / 16) else ViewGroup.LayoutParams.MATCH_PARENT,
-            if (portraitMobile) Gravity.BOTTOM else Gravity.END)
-        infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(650), maxOf(dp(100), width - dp(56))), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START).apply { setMargins(dp(28), dp(28), 0, 0) }
+        playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
+        val guideWidth = minOf(dp(if (isTv) 360 else 320), (width * if (portraitMobile) 0.84f else 0.42f).toInt())
+        guide.layoutParams = FrameLayout.LayoutParams(guideWidth, -1, Gravity.END)
+        infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(420), width - dp(32)), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(16), dp(16), 0, 0) }
+        nameText.textSize = if (isTv) 22f else 17f
+        channelLogo.visibility = View.GONE
+
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         updateLayout()
-        if (portraitMobile && ::access.isInitialized && access.canPlay()) showGuide()
+
     }
     private fun showReceiverMenu() {
         if (!::access.isInitialized || !access.canPlay()) return
@@ -537,13 +579,25 @@ class MainActivity : AppCompatActivity() {
             if (found >= 0) guideModeIndex = found
         }
 
+        val opening = guide.visibility != View.VISIBLE
+        guideScrim.visibility = View.VISIBLE
         guide.visibility = View.VISIBLE
+        if (opening) {
+            guide.translationX = guide.layoutParams.width.toFloat()
+            guide.animate().translationX(0f).setDuration(180).start()
+        }
+        touchControls.visibility = View.GONE
+        infoBox.visibility = View.GONE
+        status.visibility = View.GONE
         rebuildGuide(keepFocus = false)
         adapter.focusGlobalIndex(list, currentIndex)
     }
 
     private fun hideGuide() {
+        guide.animate().cancel()
+        guide.translationX = 0f
         guide.visibility = View.GONE
+        guideScrim.visibility = View.GONE
         search.clearFocus()
         hideKeyboard()
     }
@@ -591,9 +645,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        adapter.submit(rows, favorites)
+        adapter.submit(rows, favorites, currentIndex)
         guideTitle.text = mode.label.uppercase() + "  •  " + rows.size
-        guideHint.text = "← / → Filter    OK Play    LONG OK Favorite    INFO Favorite"
+        guideHint.text = if (isTv) "← → Filter · OK Play · Hold OK ★" else "Tap to play · Hold for ★"
 
         if (!keepFocus) list.post { adapter.focusGlobalIndex(list, currentIndex) }
     }
@@ -654,6 +708,30 @@ class MainActivity : AppCompatActivity() {
         val position = list.getChildAdapterPosition(child)
         if (position == RecyclerView.NO_POSITION) return null
         return adapter.globalIndexAt(position)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (!isTv && ::access.isInitialized && access.canPlay() && activeDialog == null && !updater.isShowingDialog) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    gestureX = event.x; gestureY = event.y
+                    gestureCanOpen = event.x >= resources.displayMetrics.widthPixels - dp(48) && guide.visibility != View.VISIBLE
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.x - gestureX
+                    val dy = event.y - gestureY
+                    val open = gestureCanOpen && dx < -dp(64)
+                    val close = guide.visibility == View.VISIBLE && gestureX >= guide.left && dx > dp(64)
+                    if ((open || close) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f) {
+                        val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                        super.dispatchTouchEvent(cancel); cancel.recycle()
+                        if (open) showGuide() else hideGuide()
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -735,7 +813,7 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_NUMPAD_ENTER,
             KeyEvent.KEYCODE_MENU,
             KeyEvent.KEYCODE_GUIDE -> {
-                showReceiverMenu()
+                showGuide()
                 return true
             }
 
