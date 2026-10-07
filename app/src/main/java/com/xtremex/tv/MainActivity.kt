@@ -42,7 +42,8 @@ import org.json.JSONArray
 import android.content.res.Configuration
 import android.content.pm.ActivityInfo
 import android.widget.ImageView
-import android.widget.Button
+import android.widget.ImageButton
+import android.graphics.drawable.StateListDrawable
 import com.xtremex.tv.auth.AccessController
 
 class MainActivity : AppCompatActivity() {
@@ -53,6 +54,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerView: PlayerView
     private lateinit var infoBox: LinearLayout
     private lateinit var touchControls: LinearLayout
+    private lateinit var pauseIcon: ImageView
+    private lateinit var pauseLabel: TextView
+    private lateinit var screenLabel: TextView
+    private val guideTabs = mutableListOf<Pair<TextView, GuideKind?>>()
     private lateinit var channelLogo: ImageView
     private lateinit var numberText: TextView
     private lateinit var nameText: TextView
@@ -88,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private var numericBuffer = ""
     private var firstPlayPending = true
     private var playbackLayoutStarted = false
+    private var userPaused = false
     private var guideModes: List<GuideMode> = listOf(GuideMode(GuideKind.ALL, "All"))
     private var guideModeIndex = 0
     private var favorites = linkedSetOf<String>()
@@ -134,7 +140,7 @@ class MainActivity : AppCompatActivity() {
                 signupView.visibility = View.GONE
                 if (channels.isNotEmpty()) {
                     if (firstPlayPending || player.mediaItemCount == 0) { firstPlayPending = false; tune(currentIndex) }
-                    else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
+                    else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); if (!userPaused) player.play() }
 
                 }
             } else {
@@ -181,14 +187,19 @@ class MainActivity : AppCompatActivity() {
             useController = false
             isFocusable = false
             keepScreenOn = true
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            resizeMode = when (prefs.getString("screen_mode", "Stretch")) {
+                "Fit" -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                "Fill" -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            }
             setShutterBackgroundColor(Color.BLACK)
         }
         root.addView(playerView)
 
         infoBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(14), dp(20), dp(14))
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
             background = panelDrawable()
             visibility = View.GONE
         }
@@ -198,17 +209,20 @@ class MainActivity : AppCompatActivity() {
                 .apply { setMargins(dp(28), dp(28), 0, 0) }
         )
 
-        numberText = text(14, Color.rgb(238, 51, 78), true)
-        nameText = text(25, Color.WHITE, true).apply {
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
+        numberText = text(12, Color.rgb(238, 51, 78), true)
+        nameText = text(16, Color.WHITE, true).apply {
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        metaText = text(13, Color.rgb(138, 150, 168), false)
+        metaText = text(11, Color.rgb(180, 187, 197), false)
         channelLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = "Channel logo" }
-        infoBox.addView(channelLogo, LinearLayout.LayoutParams(dp(64), dp(48)))
-        infoBox.addView(numberText)
-        infoBox.addView(nameText)
-        infoBox.addView(metaText)
+        infoBox.addView(channelLogo, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(10) })
+        val channelIdentity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val channelHeading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        channelHeading.addView(numberText, LinearLayout.LayoutParams(dp(32), -2))
+        channelHeading.addView(nameText, LinearLayout.LayoutParams(0, -2, 1f))
+        channelIdentity.addView(channelHeading)
+        channelIdentity.addView(metaText)
+        infoBox.addView(channelIdentity, LinearLayout.LayoutParams(0, -2, 1f))
 
         numberEntry = text(30, Color.rgb(238, 51, 78), true).apply {
             background = panelDrawable()
@@ -234,7 +248,7 @@ class MainActivity : AppCompatActivity() {
         guide = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            setBackgroundColor(Color.argb(205, 7, 12, 19))
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.argb(195, 10, 16, 23), Color.argb(225, 10, 16, 23))).apply { cornerRadius = dp(16).toFloat(); setStroke(dp(1), Color.argb(35, 255, 255, 255)) }
             isClickable = true
             visibility = View.GONE
         }
@@ -243,51 +257,43 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams(dp(500), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END)
         )
 
-        guideTitle = text(17, Color.rgb(238, 51, 78), true)
+        guideTitle = text(18, Color.WHITE, true)
         val guideHeader = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         guideHeader.addView(guideTitle, LinearLayout.LayoutParams(0, -2, 1f))
-        guideHeader.addView(text(22, Color.WHITE, true).apply {
-            text = "×"; gravity = Gravity.CENTER; contentDescription = "Close channels"
-            setOnClickListener { hideGuide() }
+        guideHeader.addView(ImageButton(this).apply {
+            setImageResource(R.drawable.player_close); background = focusDrawable(); contentDescription = "Close channels"
+            setPadding(dp(12), dp(12), dp(12), dp(12)); setOnClickListener { hideGuide() }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
         guide.addView(guideHeader)
-        val tabs = LinearLayout(this)
-        listOf("All" to GuideKind.ALL, "★" to GuideKind.FAVORITES, "Recent" to GuideKind.RECENT).forEach { (label, kind) ->
-            tabs.addView(text(12, Color.WHITE, false).apply {
-                text = label; gravity = Gravity.CENTER; background = panelDrawable()
-                setOnClickListener { setGuideMode(kind) }
-            }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        }
-        tabs.addView(text(12, Color.WHITE, false).apply {
-            text = "Filter"; gravity = Gravity.CENTER; background = panelDrawable()
-            setOnClickListener { showCategories() }
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        guide.addView(tabs)
-
-        guideHint = text(11, Color.rgb(138, 150, 168), false)
-        guide.addView(
-            guideHint,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = dp(4) }
-        )
-
         search = EditText(this).apply {
-            hint = "Search channel"
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.rgb(105, 117, 136))
-            textSize = 15f
-            isSingleLine = true
-            setPadding(dp(14), 0, dp(14), 0)
-            background = panelDrawable()
+            hint = "Search channels"; setTextColor(Color.WHITE); setHintTextColor(Color.rgb(165, 175, 189))
+            textSize = 13f; isSingleLine = true; setPadding(dp(12), 0, dp(12), 0)
+            background = chipDrawable(false)
+            val icon = androidx.appcompat.content.res.AppCompatResources.getDrawable(this@MainActivity, R.drawable.player_search)!!
+            icon.setBounds(0, 0, dp(18), dp(18)); setCompoundDrawables(icon, null, null, null); compoundDrawablePadding = dp(8)
         }
-        guide.addView(
-            search,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
-                .apply { topMargin = dp(12) }
-        )
+        guide.addView(search, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4); bottomMargin = dp(8) })
+        val tabs = LinearLayout(this)
+        fun tab(label: String, kind: GuideKind?, action: () -> Unit) {
+            val view = text(11, Color.WHITE, false).apply {
+                text = label; gravity = Gravity.CENTER; isFocusable = true; isClickable = true
+                background = focusDrawable(); setOnClickListener { action() }
+                setOnFocusChangeListener { _, _ -> updateGuideTabs() }
+            }
+            guideTabs.add(view to kind)
+            tabs.addView(view, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+        }
+        tab("All", GuideKind.ALL) { setGuideMode(GuideKind.ALL) }
+        tab("★ Saved", GuideKind.FAVORITES) { setGuideMode(GuideKind.FAVORITES) }
+        tab("Recent", GuideKind.RECENT) { setGuideMode(GuideKind.RECENT) }
+        tab("Filter", GuideKind.CATEGORY) { showCategories() }
+        guide.addView(tabs)
+        guideHint = text(10, Color.rgb(165, 175, 189), false).apply { visibility = if (isTv) View.VISIBLE else View.GONE }
+        guide.addView(guideHint, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
 
         list = RecyclerView(this).apply {
-            clipToPadding = false
+            clipToPadding = true
+            clipChildren = true
             setPadding(0, dp(8), 0, dp(8))
         }
         guide.addView(
@@ -318,23 +324,33 @@ class MainActivity : AppCompatActivity() {
 
         touchControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-            background = panelDrawable()
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, Color.argb(225, 5, 8, 13)))
         }
-        fun control(label: String, action: () -> Unit) {
-            touchControls.addView(Button(this).apply { text = label; textSize = 12f; minWidth = 0; minimumWidth = 0; setPadding(dp(8), 0, dp(8), 0); setOnClickListener { action(); revealControls() } })
+        fun control(label: String, resource: Int, action: () -> Unit): Pair<ImageView, TextView> {
+            val icon = ImageView(this).apply { setImageResource(resource); scaleType = ImageView.ScaleType.FIT_CENTER }
+            val caption = text(10, Color.WHITE, false).apply { text = label; gravity = Gravity.CENTER }
+            val button = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; isFocusable = true; isClickable = true
+                contentDescription = label; background = focusDrawable()
+                addView(icon, LinearLayout.LayoutParams(dp(24), dp(24)))
+                addView(caption, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                setOnClickListener { action(); revealControls() }
+            }
+            touchControls.addView(button, LinearLayout.LayoutParams(0, dp(60), 1f))
+            return icon to caption
         }
-        if (!isTv) {
-            control("CH −") { if (channels.isNotEmpty()) tune((currentIndex - 1 + channels.size) % channels.size) }
-            control("CH +") { if (channels.isNotEmpty()) tune((currentIndex + 1) % channels.size) }
-        }
-        control("Channels") { showGuide() }
-        if (!isTv) control("⛶") {
-            requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-        }
-        control("Menu") { showReceiverMenu() }
-        root.addView(touchControls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(16) })
+        control("Previous", R.drawable.player_previous) { if (channels.isNotEmpty()) tune((currentIndex - 1 + channels.size) % channels.size) }
+        val pause = control("Pause", R.drawable.player_pause) { togglePlayback() }
+        pauseIcon = pause.first; pauseLabel = pause.second
+        control("Next", R.drawable.player_next) { if (channels.isNotEmpty()) tune((currentIndex + 1) % channels.size) }
+        control("Channels", R.drawable.player_channels) { showGuide() }
+        screenLabel = control(prefs.getString("screen_mode", "Stretch") ?: "Stretch", R.drawable.player_screen) { showScreenModes() }.second
+        control("Settings", R.drawable.player_settings) { showReceiverMenu() }
+        root.addView(touchControls, FrameLayout.LayoutParams(-1, dp(88), Gravity.BOTTOM))
         touchControls.visibility = View.GONE
-        playerView.setOnClickListener { if (isTv) showReceiverMenu() else revealControls() }
+        playerView.setOnClickListener { if (isTv) showGuide() else { showInfo(); revealControls() } }
+
         guideTitle.setOnClickListener { cycleGuide(1) }
         signupView = SignupView(this, { access.register(it) }, { access.retry() })
         root.addView(signupView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -343,8 +359,48 @@ class MainActivity : AppCompatActivity() {
         updateLayout()
     }
 
+    private fun chipDrawable(selected: Boolean) = GradientDrawable().apply {
+        cornerRadius = dp(18).toFloat()
+        setColor(if (selected) Color.argb(220, 205, 25, 53) else Color.argb(90, 18, 24, 33))
+        setStroke(dp(1), if (selected) Color.rgb(238, 51, 78) else Color.argb(50, 255, 255, 255))
+    }
+    private fun focusDrawable() = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_focused), chipDrawable(true))
+        addState(intArrayOf(android.R.attr.state_pressed), chipDrawable(true))
+        addState(intArrayOf(), chipDrawable(false))
+    }
+    private fun updateGuideTabs() {
+        val kind = guideModes.getOrNull(guideModeIndex)?.kind
+        guideTabs.forEach { (view, target) -> view.background = if (target == kind || view.hasFocus()) chipDrawable(true) else focusDrawable() }
+    }
+    private fun togglePlayback() {
+        if (!::access.isInitialized || !access.canPlay() || player.mediaItemCount == 0) return
+        userPaused = player.playWhenReady
+        if (userPaused) player.pause() else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
+        updatePlaybackControl()
+    }
+    private fun updatePlaybackControl() {
+        if (!::pauseIcon.isInitialized || !::player.isInitialized) return
+        val playing = player.playWhenReady
+        pauseIcon.setImageResource(if (playing) R.drawable.player_pause else R.drawable.player_play)
+        pauseLabel.text = if (playing) "Pause" else "Play"
+        (pauseIcon.parent as View).contentDescription = pauseLabel.text
+    }
+    private fun showScreenModes() {
+        val labels = arrayOf("Stretch — full screen, no crop", "Fill — keep shape, crop edges", "Fit — full picture, allow borders")
+        val modes = arrayOf("Stretch", "Fill", "Fit")
+        val chosen = modes.indexOf(prefs.getString("screen_mode", "Stretch")).coerceAtLeast(0)
+        activeDialog = AlertDialog.Builder(this).setTitle("Screen size").setSingleChoiceItems(labels, chosen) { dialog, index ->
+            prefs.edit().putString("screen_mode", modes[index]).apply()
+            playerView.resizeMode = when (index) { 1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM; 2 -> AspectRatioFrameLayout.RESIZE_MODE_FIT; else -> AspectRatioFrameLayout.RESIZE_MODE_FILL }
+            screenLabel.text = modes[index]
+            dialog.dismiss()
+        }.create().apply { setOnDismissListener { if (activeDialog === this) activeDialog = null }; show() }
+    }
+
     private fun revealControls() {
         if (guide.visibility == View.VISIBLE) return
+        updatePlaybackControl()
         touchControls.visibility = View.VISIBLE
         handler.removeCallbacks(hideTouchControls)
         handler.postDelayed(hideTouchControls, 5000)
@@ -353,11 +409,11 @@ class MainActivity : AppCompatActivity() {
     private fun updateLayout() {
         val width = resources.displayMetrics.widthPixels
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
-        val guideWidth = minOf(dp(if (isTv) 360 else 320), (width * if (portraitMobile) 0.84f else 0.42f).toInt())
+        val guideWidth = minOf(dp(if (isTv) 380 else 340), (width * if (portraitMobile) 0.90f else 0.34f).toInt())
         guide.layoutParams = FrameLayout.LayoutParams(guideWidth, -1, Gravity.END)
         infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(420), width - dp(32)), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(16), dp(16), 0, 0) }
-        nameText.textSize = if (isTv) 22f else 17f
-        channelLogo.visibility = View.GONE
+        nameText.textSize = if (isTv) 18f else 15f
+
 
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -367,7 +423,7 @@ class MainActivity : AppCompatActivity() {
     }
     private fun showReceiverMenu() {
         if (!::access.isInitialized || !access.canPlay()) return
-        val labels = arrayOf("All channels", "Favorites", "Recent", "Categories", "Search", "Favorite current channel", "Previous channel", "Refresh channels", "Check update", "Full screen / Auto rotate", "Exit")
+        val labels = arrayOf("All channels", "Favorites", "Recent", "Categories", "Search", "Favorite current channel", "Previous channel", "Refresh channels", "Check update", "Full screen / Auto rotate", "Screen size: Stretch / Fill / Fit", "Exit")
         activeDialog = AlertDialog.Builder(this).setTitle("XtremeX TV").setItems(labels) { _, choice ->
             when (choice) {
                 0 -> showGuide(GuideKind.ALL)
@@ -380,9 +436,10 @@ class MainActivity : AppCompatActivity() {
                 7 -> refreshPlaylist(true)
                 8 -> updater.check(true)
                 9 -> if (!isTv) requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-                10 -> finishAffinity()
+                10 -> showScreenModes()
+                11 -> finishAffinity()
             }
-        }.create().apply { setOnDismissListener { activeDialog = null }; show() }
+        }.create().apply { setOnDismissListener { if (activeDialog === this) activeDialog = null }; show() }
     }
 
     private fun showCategories() {
@@ -392,7 +449,7 @@ class MainActivity : AppCompatActivity() {
             .setItems(categories.map { it.value.label }.toTypedArray()) { _, choice ->
                 guideModeIndex = categories[choice].index
                 showGuide()
-            }.create().apply { setOnDismissListener { activeDialog = null }; show() }
+            }.create().apply { setOnDismissListener { if (activeDialog === this) activeDialog = null }; show() }
     }
 
     private fun buildPlayer() {
@@ -430,6 +487,7 @@ class MainActivity : AppCompatActivity() {
         playerView.player = player
 
         player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { updatePlaybackControl() }
             override fun onIsPlayingChanged(isPlaying: Boolean) { if (::access.isInitialized) access.heartbeat() }
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
@@ -523,6 +581,7 @@ class MainActivity : AppCompatActivity() {
             .apply()
 
         rememberRecent(channel.id)
+        userPaused = false
         playCurrentSource()
         showInfo()
     }
@@ -542,7 +601,7 @@ class MainActivity : AppCompatActivity() {
                 .build()
         )
         player.prepare()
-        player.playWhenReady = true
+        player.playWhenReady = !userPaused
     }
 
     private fun retryFromPrimary() {
@@ -646,7 +705,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         adapter.submit(rows, favorites, currentIndex)
-        guideTitle.text = mode.label.uppercase() + "  •  " + rows.size
+        guideTitle.text = (if (mode.kind == GuideKind.ALL) "Channels" else mode.label) + "  " + rows.size
+        updateGuideTabs()
         guideHint.text = if (isTv) "← → Filter · OK Play · Hold OK ★" else "Tap to play · Hold for ★"
 
         if (!keepFocus) list.post { adapter.focusGlobalIndex(list, currentIndex) }
@@ -794,6 +854,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (event.keyCode) {
+            KeyEvent.KEYCODE_SETTINGS -> { showReceiverMenu(); return true }
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_CHANNEL_UP,
             KeyEvent.KEYCODE_MEDIA_NEXT -> {
@@ -858,7 +919,7 @@ class MainActivity : AppCompatActivity() {
 
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
             KeyEvent.KEYCODE_SPACE -> {
-                if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
+                togglePlayback()
                 showInfo()
                 return true
             }
@@ -883,7 +944,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage("Current channel will be remembered for next launch.")
             .setPositiveButton("Exit") { _, _ -> finishAffinity() }
             .setNegativeButton("Keep watching", null)
-            .create().apply { setOnDismissListener { activeDialog = null }; show() }
+            .create().apply { setOnDismissListener { if (activeDialog === this) activeDialog = null }; show() }
     }
 
     private fun showKeyboard() {

@@ -6,6 +6,9 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -69,12 +72,22 @@ class ChannelAdapter(
             background = rowBackground(false)
         }
 
+        val tile = FrameLayout(context).apply { background = rowBackground(false) }
+        val initials = TextView(context).apply { setTextColor(Color.WHITE); textSize = 11f; gravity = Gravity.CENTER }
+        tile.addView(initials, FrameLayout.LayoutParams(-1, -1))
+        val logo = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER; setPadding(dp(context, 3), dp(context, 3), dp(context, 3), dp(context, 3))
+            setBackgroundColor(Color.rgb(18, 25, 34))
+        }
+        tile.addView(logo, FrameLayout.LayoutParams(-1, -1))
+        row.addView(tile, LinearLayout.LayoutParams(dp(context, 32), dp(context, 32)).apply { marginEnd = dp(context, 8) })
+
         val number = TextView(context).apply {
             setTextColor(Color.WHITE)
-            textSize = 14f
+            textSize = 11f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
-        row.addView(number, LinearLayout.LayoutParams(dp(context, 40), ViewGroup.LayoutParams.WRAP_CONTENT))
+        row.addView(number, LinearLayout.LayoutParams(dp(context, 30), ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val name = TextView(context).apply {
             setTextColor(Color.WHITE)
@@ -84,14 +97,17 @@ class ChannelAdapter(
         }
         row.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val status = TextView(context).apply {
-            gravity = Gravity.CENTER
-            textSize = 12f
-            setTextColor(Color.rgb(238, 51, 78))
+        val favorite = ImageButton(context).apply {
+            setImageResource(R.drawable.player_favorite_outline)
+            setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12))
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), rowBackground(true))
+                addState(intArrayOf(), android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            }
+            contentDescription = "Save favorite"
         }
-        row.addView(status, LinearLayout.LayoutParams(dp(context, 32), ViewGroup.LayoutParams.WRAP_CONTENT))
-
-        return Holder(row, number, name, status)
+        row.addView(favorite, LinearLayout.LayoutParams(dp(context, 48), dp(context, 48)))
+        return Holder(row, number, name, favorite, logo, initials)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
@@ -102,21 +118,20 @@ class ChannelAdapter(
         holder.number.setTextColor(if (row.globalIndex == playingIndex) Color.rgb(238, 51, 78) else Color.WHITE)
         holder.number.text = "%03d".format(row.globalIndex + 1)
         holder.name.text = channel.name
-        holder.status.text = when {
-            favorite -> "★"
-            channel.sources.size > 1 -> "+" + (channel.sources.size - 1)
-            channel.hasBdixSource -> "HTTP"
-            else -> ""
-        }
-
-        holder.itemView.background = rowBackground(holder.itemView.hasFocus())
+        holder.initials.text = channel.name.take(2).uppercase()
+        holder.logo.contentDescription = channel.name + " logo"
+        ChannelLogo.show(holder.logo, channel.logo)
+        holder.favorite.setImageResource(if (favorite) R.drawable.player_favorite else R.drawable.player_favorite_outline)
+        holder.favorite.contentDescription = (if (favorite) "Remove favorite: " else "Save favorite: ") + channel.name
+        holder.favorite.setOnClickListener { onFavorite(row.globalIndex) }
+        holder.itemView.background = rowBackground(holder.itemView.hasFocus(), row.globalIndex == playingIndex)
         holder.itemView.setOnClickListener { onSelected(row.globalIndex) }
         holder.itemView.setOnLongClickListener {
             onFavorite(row.globalIndex)
             true
         }
         holder.itemView.setOnFocusChangeListener { view, focused ->
-            view.background = rowBackground(focused)
+            view.background = rowBackground(focused, row.globalIndex == playingIndex)
             view.animate()
                 .scaleX(if (focused) 1.025f else 1f)
                 .scaleY(if (focused) 1.025f else 1f)
@@ -129,18 +144,20 @@ class ChannelAdapter(
         view: View,
         val number: TextView,
         val name: TextView,
-        val status: TextView,
+        val favorite: ImageButton,
+        val logo: ImageView,
+        val initials: TextView,
     ) : RecyclerView.ViewHolder(view)
 
-    private fun rowBackground(focused: Boolean) = GradientDrawable().apply {
+    private fun rowBackground(focused: Boolean, playing: Boolean = false) = GradientDrawable().apply {
         setColor(
-            if (focused) Color.argb(210, 75, 15, 30)
-            else Color.argb(170, 11, 17, 27)
+            if (focused || playing) Color.argb(150, 105, 18, 36)
+            else Color.argb(25, 11, 17, 27)
         )
         cornerRadius = 12f
         setStroke(
             if (focused) 2 else 1,
-            if (focused) Color.rgb(238, 51, 78) else Color.argb(38, 255, 255, 255)
+            if (focused || playing) Color.rgb(238, 51, 78) else Color.argb(20, 255, 255, 255)
         )
     }
 
