@@ -1,8 +1,8 @@
 {
-  "versionName": "1.1.0",
-  "versionCode": 2,
-  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.0/XtremeX-TV-v1.1.0.apk",
-  "sha256": "552b600358d4740439872de47288a9d22ae6e0011e89896112ca40623ceebfde",
-  "notes": "Passwordless User ID access with admin approval and one-device binding; TV/mobile layouts, favorites, categories and touch controls; playback fixes; permanent signing and verified in-app updates.",
+  "versionName": "1.1.1",
+  "versionCode": 3,
+  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.1/XtremeX-TV-v1.1.1.apk",
+  "sha256": "98f66f7adefbb1f72df4b4f6a947a09d00f6f42a34b3fcf14ab30fa107343ab7",
+  "notes": "Fullscreen last-channel playback after approval; compact transparent channel drawer with mobile right-edge swipe and TV OK/Menu; touch filters, favorites, recent and close controls; smaller channel info and mobile overlap fixes.",
   "mandatory": false
 }
