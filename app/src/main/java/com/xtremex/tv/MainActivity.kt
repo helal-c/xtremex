@@ -120,7 +120,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!prefs.getBoolean("screen_default_v113", false)) prefs.edit().putString("screen_mode", "Stretch").putBoolean("screen_default_v113", true).apply()
         if (isTv) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         window.decorView.systemUiVisibility =

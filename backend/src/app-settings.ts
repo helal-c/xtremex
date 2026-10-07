@@ -1,3 +1,5 @@
+import { PNG } from 'pngjs';
+import jpeg from 'jpeg-js';
 export type PaymentMethod = {number:string;qr:string};
 export type AppSettings = {donation:{enabled:boolean;message:string;bkash:PaymentMethod;nagad:PaymentMethod};ads:{enabled:boolean;title:string;message:string;url:string}};
 export function defaultAppSettings(): AppSettings { return {donation:{enabled:false,message:'Support XtremeX TV. Donations are optional.',bkash:{number:'',qr:''},nagad:{number:'',qr:''}},ads:{enabled:false,title:'',message:'',url:''}}; }
@@ -10,6 +12,16 @@ function method(value:any):PaymentMethod {
     const bytes=Buffer.from(m[2],'base64');if(bytes.toString('base64')!==m[2]||bytes.length>130000)throw new Error('QR too large');
     if(m[1]==='png'&&!bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))throw new Error('Invalid PNG');
     if(m[1]==='jpeg'&&(bytes[0]!==255||bytes[1]!==216||bytes[2]!==255))throw new Error('Invalid JPEG');
+    if(m[1]==='png') {
+      if(bytes.length<24)throw new Error('Invalid PNG');
+      const width=bytes.readUInt32BE(16),height=bytes.readUInt32BE(20);
+      if(width<1||height<1||width>2048||height>2048)throw new Error('QR dimensions exceed 2048');
+      PNG.sync.read(bytes,{checkCRC:true});
+    } else {
+      const decoded=jpeg.decode(bytes,{useTArray:true,tolerantDecoding:false,maxResolutionInMP:4.2,maxMemoryUsageInMB:64});
+      if(decoded.width<1||decoded.height<1||decoded.width>2048||decoded.height>2048)throw new Error('QR dimensions exceed 2048');
+    }
+
   }return {number,qr};
 }
 export function validateAppSettings(value:any):AppSettings {

@@ -11,11 +11,14 @@
     "test:integration": "node --test test/integration/*.test.ts"
   },
   "dependencies": {
-    "pg": "^8.23.1"
+    "jpeg-js": "0.4.4",
+    "pg": "^8.23.1",
+    "pngjs": "7.0.0"
   },
   "devDependencies": {
     "@types/node": "^24",
     "@types/pg": "^8",
+    "@types/pngjs": "6.0.5",
     "typescript": "^5.9"
   }
 }
