@@ -29,6 +29,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      VERSION_NAME: ${{ inputs.version_name }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      NOTES: ${{ inputs.notes }}
+      MANDATORY: ${{ inputs.mandatory }}
 
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +46,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+
+      - name: Validate version inputs
+        run: |
+          python3 - <<'PYCODE'
+          import os, re
+          assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-.][A-Za-z0-9]+)*", os.environ["VERSION_NAME"]), "Invalid version name"
+          assert re.fullmatch(r"[1-9][0-9]{0,8}", os.environ["VERSION_CODE"]), "Invalid version code"
+          PYCODE
 
       - name: Verify signing secrets
         shell: bash
@@ -59,7 +72,7 @@ jobs:
         shell: bash
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/xtremex-tv.jks"
+        run: printf %s "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/xtremex-tv.jks"
 
       - name: Build signed release APK
         env:
@@ -69,13 +82,14 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle :app:assembleRelease --stacktrace
+        run: gradle :app:testDebugUnitTest :app:assembleRelease --stacktrace
 
       - name: Prepare release files
         shell: bash
         run: |
-          APK="XtremeX-TV-v${{ inputs.version_name }}.apk"
+          APK="XtremeX-TV-v${VERSION_NAME}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK" | awk '{print $1}' > apk.sha256
           echo "APK=$APK" >> "$GITHUB_ENV"
           echo "SHA256=$(cat apk.sha256)" >> "$GITHUB_ENV"
@@ -93,18 +107,15 @@ jobs:
       - name: Update OTA metadata
         shell: bash
         run: |
-          cat > update.json <<EOF
-          {
-            "versionName": "${{ inputs.version_name }}",
-            "versionCode": ${{ inputs.version_code }},
-            "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v${{ inputs.version_name }}/XtremeX-TV-v${{ inputs.version_name }}.apk",
-            "sha256": "$SHA256",
-            "notes": $(python3 -c 'import json,os; print(json.dumps(os.environ["NOTES"]))'),
-            "mandatory": ${{ inputs.mandatory }}
-          }
-          EOF
-        env:
-          NOTES: ${{ inputs.notes }}
+          python3 - <<'PYCODE'
+          import json, os
+          name = os.environ["VERSION_NAME"]
+          metadata = {"versionName": name, "versionCode": int(os.environ["VERSION_CODE"]),
+            "apkUrl": f"https://github.com/helal-c/xtremex/releases/download/v{name}/XtremeX-TV-v{name}.apk",
+            "sha256": os.environ["SHA256"], "notes": os.environ["NOTES"],
+            "mandatory": os.environ["MANDATORY"].lower() == "true"}
+          with open("update.json", "w") as output: json.dump(metadata, output, indent=2)
+          PYCODE
 
       - name: Commit OTA metadata
         shell: bash
@@ -112,5 +123,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update.json
-          git commit -m "chore(tv): publish OTA v${{ inputs.version_name }}" || exit 0
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(tv): publish OTA v${VERSION_NAME}"
           git push

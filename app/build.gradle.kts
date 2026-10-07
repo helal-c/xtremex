@@ -11,13 +11,17 @@ val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 android {
     namespace = "com.xtremex.tv"
     compileSdk = 35
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = "com.xtremex.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+        versionCode = (System.getenv("VERSION_CODE") ?: "2").toInt()
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.0"
+        val authBase = System.getenv("AUTH_API_BASE") ?: "https://xtremex-tv-admin.vercel.app"
+        require(authBase.matches(Regex("https://[a-zA-Z0-9.-]+(:443)?/?"))) { "AUTH_API_BASE must be an HTTPS origin" }
+        buildConfigField("String", "AUTH_API_BASE", "\"$authBase\"")
     }
 
     buildFeatures {
@@ -59,6 +63,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.recyclerview:recyclerview:1.4.0")

@@ -2,7 +2,7 @@
   <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
     <item name="android:windowFullscreen">true</item>
     <item name="android:navigationBarColor">#05080D</item>
-    <item name="android:colorAccent">#F4C45D</item>
+    <item name="android:colorAccent">#EE334E</item>
     <item name="android:fontFamily">sans</item>
   </style>
 </resources>
