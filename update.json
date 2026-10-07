@@ -1,8 +1,8 @@
 {
-  "versionName": "1.1.1",
-  "versionCode": 3,
-  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.1/XtremeX-TV-v1.1.1.apk",
-  "sha256": "98f66f7adefbb1f72df4b4f6a947a09d00f6f42a34b3fcf14ab30fa107343ab7",
-  "notes": "Fullscreen last-channel playback after approval; compact transparent channel drawer with mobile right-edge swipe and TV OK/Menu; touch filters, favorites, recent and close controls; smaller channel info and mobile overlap fixes.",
+  "versionName": "1.1.2",
+  "versionCode": 4,
+  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.2/XtremeX-TV-v1.1.2.apk",
+  "sha256": "68ceff0431e57eb07fe6301f6ce76daa830c180f7dbab0fe63f26ea0fee19385",
+  "notes": "Professional Previous/Play-Pause/Next icon controls; translucent channel playlist with logos and favorite stars; default Stretch with saved Stretch/Fill/Fit options; pause preserved across access checks; mobile and TV layout refinements.",
   "mandatory": false
 }
