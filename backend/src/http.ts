@@ -12,19 +12,19 @@ export function send(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-export async function readJson(req: IncomingMessage): Promise<any> {
+export async function readJson(req: IncomingMessage, maxBytes = 16384): Promise<any> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new Error('JSON content type required');
   const parsed = (req as IncomingMessage & { body?: unknown }).body;
   if (parsed !== undefined) {
     const encoded = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
-    if (Buffer.byteLength(encoded) > 16384) throw new Error('Request too large');
+    if (Buffer.byteLength(encoded) > maxBytes) throw new Error('Request too large');
     return JSON.parse(encoded);
   }
   const chunks: Buffer[] = []; let length = 0;
   for await (const chunk of req) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     length += bytes.length;
-    if (length > 16384) throw new Error('Request too large');
+    if (length > maxBytes) throw new Error('Request too large');
     chunks.push(bytes);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -72,6 +72,16 @@ export async function handler(req: IncomingMessage, res: ServerResponse) {
         res.setHeader('Set-Cookie',['__Host-xtremex_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0','__Host-xtremex_csrf=; Path=/; Secure; SameSite=Strict; Max-Age=0']);
         return send(res,200,{status:'ok'});
       }
+      if(path==='/api/admin/password' && req.method==='POST') {
+        if(!await throttle(req,'admin-password',5))return send(res,429,{error:'Too many attempts'});
+        const body=await readJson(req);
+        try { await admin.changePassword(token!,body.currentPassword,body.newPassword); }
+        catch { return send(res,400,{error:'Check your current password and use a different new password of 12–128 characters'}); }
+        res.setHeader('Set-Cookie',['__Host-xtremex_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0','__Host-xtremex_csrf=; Path=/; Secure; SameSite=Strict; Max-Age=0']);
+        return send(res,200,{status:'ok'});
+      }
+      if(path==='/api/admin/app-settings' && req.method==='GET')return send(res,200,await admin.appSettings());
+      if(path==='/api/admin/app-settings' && req.method==='PATCH')return send(res,200,await admin.updateAppSettings(await readJson(req,400000)));
       if (path==='/api/admin/dashboard' && req.method==='GET') return send(res,200,await admin.dashboard());
       if (path==='/api/admin/accounts' && req.method==='GET') {
         const params=new URL(req.url!,'https://localhost').searchParams;
@@ -86,9 +96,10 @@ export async function handler(req: IncomingMessage, res: ServerResponse) {
       if (action && req.method==='POST') return send(res,200,await admin.mutate(action[1],action[2],await readJson(req)));
       return send(res,404,{error:'Not found'});
     }
+    if(path==='/api/app-config' && req.method==='GET') return send(res,200,await new Admin(database()).appSettings());
     if (path === '/api/status' && req.method === 'GET') {
       await database().query('SELECT 1 FROM accounts LIMIT 1');
-      return send(res, 200, { status: 'ok', version: '1.1.0' });
+      return send(res, 200, { status: 'ok', version: '1.1.3' });
     }
     if (!['/api/challenge','/api/register','/api/session','/api/heartbeat'].includes(path)) return send(res,404,{error:'Not found'});
     if (req.method !== 'POST') return send(res,405,{error:'POST required'});

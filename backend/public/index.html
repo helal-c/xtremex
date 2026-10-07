@@ -25,7 +25,18 @@
         <div class="pagination"><button id="previous">Previous</button><span id="page"></span><button id="next">Next</button></div>
       </section>
       <section id="audit" hidden><h2>Admin activity</h2><div id="audit-list"></div></section>
-      <section id="settings" hidden><h2>App support</h2><p class="muted">This number appears on Pending and Blocked screens.</p><form id="settings-form"><label for="support">Support number</label><input id="support" type="tel" maxlength="32" placeholder="Enter your support number"><button class="primary">Save settings</button></form></section>
+      <section id="settings" hidden><h2>App support</h2><p class="muted">This number appears on Pending and Blocked screens.</p><form id="settings-form"><label for="support">Support number</label><input id="support" type="tel" maxlength="32" placeholder="Enter your support number"><button class="primary">Save settings</button></form>
+      <div class="settings-grid">
+      <section class="setting-card"><h2>Change password</h2><p class="muted">Changing your password signs out every admin session.</p>
+      <form id="password-form"><label for="current-password">Current password</label><input id="current-password" type="password" autocomplete="current-password" required maxlength="512"><label for="new-password">New password · 12–128 characters</label><input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"><label for="confirm-password">Confirm new password</label><input id="confirm-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"><button class="primary">Change password</button></form></section>
+      <section class="setting-card"><h2>Donate</h2><p class="muted">Optional support from viewers. Appears in app Settings when enabled.</p>
+      <form id="donation-form"><label class="toggle"><input id="donation-enabled" type="checkbox"> Show Donate in the app</label><label for="donation-message">Message</label><textarea id="donation-message" maxlength="300" rows="3"></textarea>
+      <fieldset><legend>bKash</legend><label for="bkash-number">Send Money number</label><input id="bkash-number" type="tel" maxlength="16" placeholder="01XXXXXXXXX"><label for="bkash-qr">QR image · PNG/JPEG, max 125 KB</label><input id="bkash-qr" type="file" accept="image/png,image/jpeg"><img id="bkash-preview" class="qr-preview" alt="bKash donation QR" hidden><button id="bkash-clear" type="button">Remove QR</button></fieldset>
+      <fieldset><legend>Nagad</legend><label for="nagad-number">Send Money number</label><input id="nagad-number" type="tel" maxlength="16" placeholder="01XXXXXXXXX"><label for="nagad-qr">QR image · PNG/JPEG, max 125 KB</label><input id="nagad-qr" type="file" accept="image/png,image/jpeg"><img id="nagad-preview" class="qr-preview" alt="Nagad donation QR" hidden><button id="nagad-clear" type="button">Remove QR</button></fieldset>
+      <p class="muted">Viewers copy the number and complete Send Money in their payment app, or scan your QR. Payments are not automatically verified.</p><button class="primary">Save donation settings</button></form></section>
+      <section class="setting-card"><h2>Ads &amp; sponsors</h2><p class="muted">Optional sponsor card in app Settings. Ad-network integration can be added later.</p><form id="ads-form"><label class="toggle"><input id="ads-enabled" type="checkbox"> Show sponsor card</label><label for="ads-title">Sponsor title</label><input id="ads-title" maxlength="80"><label for="ads-message">Message</label><textarea id="ads-message" rows="3" maxlength="240"></textarea><label for="ads-url">Website · HTTPS</label><input id="ads-url" type="url" maxlength="1000" placeholder="https://"><button class="primary">Save sponsor settings</button></form></section>
+      </div>
+</section>
     </div>
   </main>
   <footer>Xtreme’x Communication Solutions</footer>

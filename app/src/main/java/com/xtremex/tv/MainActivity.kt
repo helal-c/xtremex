@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val repository by lazy { PlaylistRepository(this) }
     private val updater by lazy { UpdateManager(this) }
+    private val extras by lazy { AppExtras(this) }
     private val prefs by lazy { getSharedPreferences("xtremex-tv", MODE_PRIVATE) }
 
     private var channels: List<TvChannel> = emptyList()
@@ -119,6 +120,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!prefs.getBoolean("screen_default_v113", false)) prefs.edit().putString("screen_mode", "Stretch").putBoolean("screen_default_v113", true).apply()
         if (isTv) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         window.decorView.systemUiVisibility =
@@ -337,7 +339,7 @@ class MainActivity : AppCompatActivity() {
                 addView(caption, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
                 setOnClickListener { action(); revealControls() }
             }
-            touchControls.addView(button, LinearLayout.LayoutParams(0, dp(60), 1f))
+            touchControls.addView(button, LinearLayout.LayoutParams(0, dp(52), 1f).apply { marginStart = dp(2); marginEnd = dp(2) })
             return icon to caption
         }
         control("Previous", R.drawable.player_previous) { if (channels.isNotEmpty()) tune((currentIndex - 1 + channels.size) % channels.size) }
@@ -347,7 +349,7 @@ class MainActivity : AppCompatActivity() {
         control("Channels", R.drawable.player_channels) { showGuide() }
         screenLabel = control(prefs.getString("screen_mode", "Stretch") ?: "Stretch", R.drawable.player_screen) { showScreenModes() }.second
         control("Settings", R.drawable.player_settings) { showReceiverMenu() }
-        root.addView(touchControls, FrameLayout.LayoutParams(-1, dp(88), Gravity.BOTTOM))
+        root.addView(touchControls, FrameLayout.LayoutParams(-2, dp(68), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         touchControls.visibility = View.GONE
         playerView.setOnClickListener { if (isTv) showGuide() else { showInfo(); revealControls() } }
 
@@ -411,8 +413,9 @@ class MainActivity : AppCompatActivity() {
         playerView.layoutParams = FrameLayout.LayoutParams(-1, -1)
         val guideWidth = minOf(dp(if (isTv) 380 else 340), (width * if (portraitMobile) 0.90f else 0.34f).toInt())
         guide.layoutParams = FrameLayout.LayoutParams(guideWidth, -1, Gravity.END)
-        infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(420), width - dp(32)), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(16), dp(16), 0, 0) }
-        nameText.textSize = if (isTv) 18f else 15f
+        infoBox.layoutParams = FrameLayout.LayoutParams(minOf(dp(300), width - dp(32)), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(16), dp(16), 0, 0) }
+        touchControls.layoutParams = FrameLayout.LayoutParams(minOf(dp(480), width - dp(24)), dp(68), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(10) }
+        nameText.textSize = if (isTv) 17f else 14f
 
 
     }
@@ -423,23 +426,34 @@ class MainActivity : AppCompatActivity() {
     }
     private fun showReceiverMenu() {
         if (!::access.isInitialized || !access.canPlay()) return
-        val labels = arrayOf("All channels", "Favorites", "Recent", "Categories", "Search", "Favorite current channel", "Previous channel", "Refresh channels", "Check update", "Full screen / Auto rotate", "Screen size: Stretch / Fill / Fit", "Exit")
-        activeDialog = AlertDialog.Builder(this).setTitle("XtremeX TV").setItems(labels) { _, choice ->
-            when (choice) {
-                0 -> showGuide(GuideKind.ALL)
-                1 -> showGuide(GuideKind.FAVORITES)
-                2 -> showGuide(GuideKind.RECENT)
-                3 -> showCategories()
-                4 -> { showGuide(); search.requestFocus(); showKeyboard() }
-                5 -> toggleFavorite(currentIndex)
-                6 -> if (previousIndex >= 0) tune(previousIndex)
-                7 -> refreshPlaylist(true)
-                8 -> updater.check(true)
-                9 -> if (!isTv) requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-                10 -> showScreenModes()
-                11 -> finishAffinity()
+        showStatus("Loading settings…")
+        extras.refresh { renderSettingsMenu() }
+    }
+    private fun renderSettingsMenu() {
+        if (!::access.isInitialized || !access.canPlay() || isFinishing) return
+        extras.panel("Settings · " + BuildConfig.VERSION_NAME) { content, dismiss ->
+            fun item(label: String, action: () -> Unit) {
+                content.addView(extras.button(label) { dismiss(); action() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
             }
-        }.create().apply { setOnDismissListener { if (activeDialog === this) activeDialog = null }; show() }
+            item("Channels") { showGuide(GuideKind.ALL) }
+            item("Favorites") { showGuide(GuideKind.FAVORITES) }
+            item("Recent channels") { showGuide(GuideKind.RECENT) }
+            item("Categories") { showCategories() }
+            item("Search channels") { showGuide(); search.requestFocus(); showKeyboard() }
+            item("Favorite current channel") { toggleFavorite(currentIndex) }
+            item("Previous channel") { if (previousIndex >= 0) tune(previousIndex) }
+            item("Screen size · " + (prefs.getString("screen_mode", "Stretch") ?: "Stretch")) { showScreenModes() }
+            if (!isTv) item("Full screen / Auto rotate") { requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR }
+            item("Refresh channels") { refreshPlaylist(true) }
+            item("Check for update") { updater.check(true) }
+            item("Admin panel ↗") { extras.openAdmin() }
+            if (extras.donationEnabled()) item("♡ Donate · QR / Send Money") { extras.showDonation() }
+            extras.sponsor()?.let { ad ->
+                val label = "Sponsored · " + ad.optString("title") + "\n" + ad.optString("message")
+                item(label) { if (ad.optString("url").isNotBlank()) extras.openUrl(ad.optString("url")) }
+            }
+            item("Exit app") { finishAffinity() }
+        }
     }
 
     private fun showCategories() {
@@ -1040,6 +1054,7 @@ class MainActivity : AppCompatActivity() {
         repository.close()
         updater.close()
         if (::access.isInitialized) access.close()
+        extras.close()
         super.onDestroy()
     }
 }

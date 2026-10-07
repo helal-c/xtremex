@@ -17,8 +17,8 @@ android {
         applicationId = "com.xtremex.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = (System.getenv("VERSION_CODE") ?: "4").toInt()
-        versionName = System.getenv("VERSION_NAME") ?: "1.1.2"
+        versionCode = (System.getenv("VERSION_CODE") ?: "5").toInt()
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.3"
         val authBase = System.getenv("AUTH_API_BASE") ?: "https://xtremex-tv-admin.vercel.app"
         require(authBase.matches(Regex("https://[a-zA-Z0-9.-]+(:443)?/?"))) { "AUTH_API_BASE must be an HTTPS origin" }
         buildConfigField("String", "AUTH_API_BASE", "\"$authBase\"")

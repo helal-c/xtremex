@@ -2,6 +2,7 @@ name: Android TV Debug APK
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main]
     paths:
@@ -31,7 +32,7 @@ jobs:
           gradle-version: "8.10.2"
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lintVitalRelease --stacktrace
 
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk XtremeX-TV-v1.0.0-debug.apk
@@ -41,3 +42,30 @@ jobs:
           name: XtremeX-TV-v1.0.0-debug
           path: XtremeX-TV-v1.0.0-debug.apk
           if-no-files-found: error
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: xtremex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund && npm test && npm run typecheck
+        working-directory: backend
+      - run: node --test --test-concurrency=1 test/integration/*.test.ts
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:ci-test-only@localhost:5432/xtremex_test
