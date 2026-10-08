@@ -23,6 +23,8 @@ class AccessController(context: Context, private val deviceType: String,
     private var generation = 0
     private var nextCheck = 0L
     private var support = ""
+    var adsAllowed = false
+        private set
     private var previous = ""
     val userId: String? get() = sessions.userId
     fun canPlay() = running && lease.canPlay(SystemClock.elapsedRealtime())
@@ -40,7 +42,7 @@ class AccessController(context: Context, private val deviceType: String,
     fun start() {
         if (running) return
         running = true; generation++; busy = false; nextCheck = 0L
-        lease.invalidate(); previous = ""; tick.run()
+        lease.invalidate(); adsAllowed = false; previous = ""; tick.run()
     }
     fun stop() {
         if (!running) return
@@ -77,6 +79,7 @@ class AccessController(context: Context, private val deviceType: String,
                 val now = SystemClock.elapsedRealtime()
                 result.mapCatching { response ->
                     val status = response.optString("status")
+                    adsAllowed = status == "approved" && response.optBoolean("adsAllowed", false)
                     support = response.optString("supportNumber").take(32)
                     if (registerId != null) {
                         if (status == "pending" || status == "approved") sessions.save(id, null)

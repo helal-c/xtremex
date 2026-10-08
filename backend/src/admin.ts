@@ -82,6 +82,16 @@ export class Admin {
       return {status:'ok'};
     });
   }
+  async setPlan(id:string,plan:unknown,expected:{generation:number;fingerprint:string}) {
+    if(!/^[a-f0-9-]{36}$/.test(id)||!['free','premium'].includes(String(plan)))throw new Error('Invalid plan');
+    return transaction(this.pool,async client=>{
+      const row=(await client.query('SELECT * FROM accounts WHERE id=$1 FOR UPDATE',[id])).rows[0];
+      if(!row||row.generation!==expected.generation||row.fingerprint!==expected.fingerprint)throw new Error('Account changed');
+      await client.query('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[`account_plan:${id}`,plan]);
+      await client.query('INSERT INTO audit(actor,action,user_id) VALUES($1,$2,$3)',['owner',`plan_${plan}`,row.user_id]);
+      return {status:'ok'};
+    });
+  }
   async dashboard() {
     const totals=(await this.pool.query(`SELECT count(*)::int AS total,
       count(*) FILTER(WHERE status='pending')::int AS pending,
@@ -96,7 +106,7 @@ export class Admin {
     const filter=['pending','approved','blocked'].includes(status)?status:'';
     const values=[search.slice(0,32),filter];
     const where="WHERE ($1='' OR position($1 in user_id)>0) AND ($2='' OR status=$2)";
-    const rows=(await this.pool.query(`SELECT id,user_id,status,fingerprint,generation,device_type,device_model,app_version,created_at,last_seen,
+    const rows=(await this.pool.query(`SELECT id,user_id,status,fingerprint,generation,coalesce((SELECT value FROM settings WHERE key='account_plan:'||accounts.id::text),'premium') AS plan,device_type,device_model,app_version,created_at,last_seen,
       (status='approved' AND last_seen>now()-interval '120 seconds') AS online,
       (SELECT coalesce(sum(watch_seconds),0) FROM daily_activity d WHERE d.account_id=accounts.id) AS watch_seconds,
       (SELECT coalesce(sum(watch_seconds),0) FROM daily_activity d WHERE d.account_id=accounts.id AND day=(now() AT TIME ZONE 'Asia/Dhaka')::date) AS today_watch_seconds

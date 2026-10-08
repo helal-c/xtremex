@@ -447,7 +447,7 @@ class MainActivity : AppCompatActivity() {
             item("Check for update") { updater.check(true) }
             item("Admin panel ↗") { extras.openAdmin() }
             if (extras.donationEnabled()) item("♡ Donate · QR / Send Money") { extras.showDonation() }
-            extras.sponsor()?.let { ad ->
+            (if (access.adsAllowed) extras.sponsor() else null)?.let { ad ->
                 val label = "Sponsored · " + ad.optString("title") + "\n" + ad.optString("message")
                 item(label) { if (ad.optString("url").isNotBlank()) extras.openUrl(ad.optString("url")) }
             }

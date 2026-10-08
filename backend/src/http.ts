@@ -92,6 +92,8 @@ export async function handler(req: IncomingMessage, res: ServerResponse) {
       if (path==='/api/admin/audit' && req.method==='GET') return send(res,200,await admin.audit());
       if (path==='/api/admin/settings' && req.method==='GET') return send(res,200,await admin.settings());
       if (path==='/api/admin/settings' && req.method==='PATCH') return send(res,200,await admin.updateSettings((await readJson(req)).supportNumber));
+      const planAction=path.match(/^\/api\/admin\/accounts\/([a-f0-9-]{36})\/plan$/);
+      if(planAction&&req.method==='POST'){const body=await readJson(req);return send(res,200,await admin.setPlan(planAction[1],body.plan,body));}
       const action=path.match(/^\/api\/admin\/accounts\/([a-f0-9-]{36})\/(approve|block|unblock|reset)$/);
       if (action && req.method==='POST') return send(res,200,await admin.mutate(action[1],action[2],await readJson(req)));
       return send(res,404,{error:'Not found'});

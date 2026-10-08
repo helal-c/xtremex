@@ -33,3 +33,16 @@ test('public config never exposes password hash or unrelated settings',async()=>
  assert.equal(JSON.stringify(await admin.appSettings()).includes('scrypt'),false);
  await admin.updateSettings('+8801712345678');assert.deepEqual(await admin.settings(),{supportNumber:'+8801712345678'});
 });
+
+test('per-user plan defaults Premium and changes only the selected account',async()=>{
+ const id='10000000-0000-4000-8000-000000000001',other='10000000-0000-4000-8000-000000000002';
+ await pool.query("INSERT INTO accounts(id,user_id) VALUES($1,'plan-one'),($2,'plan-two')",[id,other]);
+ assert.equal((await admin.accounts('plan-one','',0)).accounts[0].plan,'premium');
+ await assert.rejects(admin.setPlan(id,'free',{generation:99,fingerprint:null as any}));
+ await admin.setPlan(id,'free',{generation:1,fingerprint:null as any});
+ assert.equal((await admin.accounts('plan-one','',0)).accounts[0].plan,'free');
+ assert.equal((await admin.accounts('plan-two','',0)).accounts[0].plan,'premium');
+ await admin.setPlan(id,'premium',{generation:1,fingerprint:null as any});
+ assert.equal((await admin.accounts('plan-one','',0)).accounts[0].plan,'premium');
+ await assert.rejects(admin.setPlan(id,'invalid',{generation:1,fingerprint:null as any}));
+});

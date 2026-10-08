@@ -31,14 +31,14 @@ async function users(){
     heading.append(dot,node('span',a.user_id,'user-id'));card.append(heading);
     card.append(node('span',a.status,`badge ${a.status}`));
     const details=node('div',undefined,'details');
-    for(const [label,value] of [['User ID',a.user_id],['Status',a.status],['Device',`${a.device_type} · ${a.device_model||'Awaiting device'}`],['Activity',a.online?'Online now':'Offline'],['Last seen',date(a.last_seen)],['Watch time today',minutes(a.today_watch_seconds)],['Total watch time',minutes(a.watch_seconds)],['Device fingerprint',a.fingerprint||'Awaiting device'],['Version',a.app_version||'—'],['Requested',date(a.created_at)]]){
+    for(const [label,value] of [['User ID',a.user_id],['Status',a.status],['Plan',a.plan==='free'?'Free · ads allowed':'Premium · no ads'],['Device',`${a.device_type} · ${a.device_model||'Awaiting device'}`],['Activity',a.online?'Online now':'Offline'],['Last seen',date(a.last_seen)],['Watch time today',minutes(a.today_watch_seconds)],['Total watch time',minutes(a.watch_seconds)],['Device fingerprint',a.fingerprint||'Awaiting device'],['Version',a.app_version||'—'],['Requested',date(a.created_at)]]){
       const field=node('div');field.append(node('span',label),node('div',value));details.append(field);
     }card.append(details);const actions=node('div',undefined,'actions');
     const options=[];if(a.status==='pending'&&a.fingerprint)options.push(['approve','Approve']);if(a.status==='approved')options.push(['block','Block']);if(a.status==='blocked')options.push(['unblock','Unblock']);if(a.fingerprint)options.push(['reset','Reset device']);
     for(const [action,label] of options){const b=node('button',label,action==='approve'?'primary':'');b.addEventListener('click',async()=>{
       if(action==='reset'&&!confirm(`Reset ${a.user_id}? The current installation loses access. A new device will need approval.`))return;
       b.disabled=true;try{await api(`accounts/${a.id}/${action}`,'POST',{generation:a.generation,fingerprint:a.fingerprint});notify(`${a.user_id}: ${label} completed`);await refresh();}catch(e){notify(e.message);}finally{b.disabled=false;}
-    });actions.append(b);}card.append(actions);$('account-list').append(card);
+    });actions.append(b);}const planButton=node('button',a.plan==='free'?'Make Premium · hide ads':'Make Free · allow ads');planButton.addEventListener('click',async()=>{planButton.disabled=true;try{await api(`accounts/${a.id}/plan`,'POST',{plan:a.plan==='free'?'premium':'free',generation:a.generation,fingerprint:a.fingerprint});notify('User plan saved. Apps apply it at the next access check.');await refresh();}catch(e){notify(e.message);}finally{planButton.disabled=false;}});actions.append(planButton);card.append(actions);$('account-list').append(card);
   }
   $('page').textContent=`Page ${page+1}`;$('previous').disabled=page===0;$('next').disabled=(page+1)*50>=total;
 }

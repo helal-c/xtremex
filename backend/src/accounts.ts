@@ -7,7 +7,7 @@ import { hashToken, newToken } from './sessions.ts';
 import { dhakaDay, watchIntervals } from './monitoring.ts';
 
 export type Envelope = { challengeId: string; payload: string; signature: string };
-export type Access = { status: string; token?: string; leaseSeconds?: number; supportNumber?: string };
+export type Access = { status: string; token?: string; leaseSeconds?: number; supportNumber?: string; adsAllowed?: boolean };
 
 export class Accounts {
   pool: pg.Pool;
@@ -62,11 +62,13 @@ export class Accounts {
       if (!account) return { status: 'unregistered', supportNumber };
       if (account.fingerprint !== identity.fingerprint) return { status: 'wrong_device', supportNumber };
       if (account.status !== 'approved' || action === 'register') return { status: account.status, supportNumber };
+      const plan=(await client.query("SELECT value FROM settings WHERE key=$1",[`account_plan:${account.id}`])).rows[0]?.value ?? 'premium';
+      const adsAllowed=plan==='free';
       if (action === 'session') {
         const token = newToken();
         await client.query('DELETE FROM sessions WHERE account_id=$1', [account.id]);
         await client.query("INSERT INTO sessions(token_hash,account_id,generation,expires_at) VALUES($1,$2,$3,now()+interval '30 days')", [hashToken(token), account.id, account.generation]);
-        return { status: 'approved', token, leaseSeconds: 300, supportNumber };
+        return { status: 'approved', token, leaseSeconds: 300, supportNumber, adsAllowed };
       }
       if (typeof payload.token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(payload.token)) throw new Error('Invalid session');
       const session = await client.query('SELECT 1 FROM sessions WHERE token_hash=$1 AND account_id=$2 AND generation=$3 AND expires_at>now()', [hashToken(payload.token), account.id, account.generation]);
@@ -78,7 +80,7 @@ export class Accounts {
       }
       await client.query('INSERT INTO daily_activity(account_id,day) VALUES($1,$2) ON CONFLICT DO NOTHING', [account.id, dhakaDay(now)]);
       await client.query('UPDATE accounts SET last_seen=$2,was_playing=$3,app_version=$4 WHERE id=$1', [account.id, now, payload.playing, payload.appVersion]);
-      return { status: 'approved', leaseSeconds: 300, supportNumber };
+      return { status: 'approved', leaseSeconds: 300, supportNumber, adsAllowed };
     });
   }
 }
