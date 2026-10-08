@@ -1,8 +1,8 @@
 {
-  "versionName": "1.1.2",
-  "versionCode": 4,
-  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.2/XtremeX-TV-v1.1.2.apk",
-  "sha256": "68ceff0431e57eb07fe6301f6ce76daa830c180f7dbab0fe63f26ea0fee19385",
-  "notes": "Professional Previous/Play-Pause/Next icon controls; translucent channel playlist with logos and favorite stars; default Stretch with saved Stretch/Fill/Fit options; pause preserved across access checks; mobile and TV layout refinements.",
+  "versionName": "1.1.3",
+  "versionCode": 5,
+  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.3/XtremeX-TV-v1.1.3.apk",
+  "sha256": "446fccc326782aa84b4231d914d02fb6cbb18bf9941b7d0c2d44daf828e6e15a",
+  "notes": "Compact player controls and redesigned settings with Admin panel shortcut. Support for optional bKash/Nagad donation QR and per-user Free/Premium sponsor controls. Donation and sponsor features require the upgraded admin/API deployment; disabled by default. Screen preferences are preserved.",
   "mandatory": false
 }
