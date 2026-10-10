@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val repository by lazy { PlaylistRepository(this) }
     private val updater by lazy { UpdateManager(this) }
-    private val extras by lazy { AppExtras(this) }
+    private val extras by lazy { AppExtras(this) { ::access.isInitialized && access.canPlay() && access.adsAllowed } }
     private val prefs by lazy { getSharedPreferences("xtremex-tv", MODE_PRIVATE) }
 
     private var channels: List<TvChannel> = emptyList()
@@ -133,6 +133,7 @@ class MainActivity : AppCompatActivity() {
         buildUi()
         buildPlayer()
         access = AccessController(this, if (isTv) "tv" else "mobile", { ::player.isInitialized && player.isPlaying }) { state, support, allowed ->
+            extras.accessChanged()
             if (allowed) {
                 if (!playbackLayoutStarted) {
                     playbackLayoutStarted = true
@@ -444,6 +445,7 @@ class MainActivity : AppCompatActivity() {
             item("Screen size · " + (prefs.getString("screen_mode", "Stretch") ?: "Stretch")) { showScreenModes() }
             if (!isTv) item("Full screen / Auto rotate") { requestedOrientation = if (portraitMobile) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR }
             item("Refresh channels") { refreshPlaylist(true) }
+            item("Live sports · Tapmad / FanCode ↗") { extras.showSports() }
             item("Check for update") { updater.check(true) }
             item("Admin panel ↗") { extras.openAdmin() }
             if (extras.donationEnabled()) item("♡ Donate · QR / Send Money") { extras.showDonation() }
@@ -452,6 +454,7 @@ class MainActivity : AppCompatActivity() {
                 item(label) { if (ad.optString("url").isNotBlank()) extras.openUrl(ad.optString("url")) }
             }
             item("Exit app") { finishAffinity() }
+            extras.addAdMob(content)
         }
     }
 
@@ -1042,6 +1045,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         updater.onStop()
+        extras.suspendAds()
         if (::access.isInitialized) access.stop()
         if (::player.isInitialized) player.pause()
     }

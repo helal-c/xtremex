@@ -101,7 +101,7 @@ export async function handler(req: IncomingMessage, res: ServerResponse) {
     if(path==='/api/app-config' && req.method==='GET') return send(res,200,await new Admin(database()).appSettings());
     if (path === '/api/status' && req.method === 'GET') {
       await database().query('SELECT 1 FROM accounts LIMIT 1');
-      return send(res, 200, { status: 'ok', version: '1.1.3' });
+      return send(res, 200, { status: 'ok', version: '1.1.4' });
     }
     if (!['/api/challenge','/api/register','/api/session','/api/heartbeat'].includes(path)) return send(res,404,{error:'Not found'});
     if (req.method !== 'POST') return send(res,405,{error:'POST required'});

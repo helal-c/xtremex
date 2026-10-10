@@ -22,7 +22,10 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /** Optional app content is independent of account access and playback. */
-class AppExtras(private val activity: Activity) {
+class AppExtras(private val activity: Activity, allowed: () -> Boolean) {
+    private val mobileBanner = com.xtremex.tv.ads.MobileBanner(activity, allowed)
+    fun accessChanged() = mobileBanner.accessChanged()
+    fun suspendAds() = mobileBanner.detach()
     private val executor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var closed = false
@@ -30,7 +33,7 @@ class AppExtras(private val activity: Activity) {
     private var config = JSONObject()
     private var dialog: AlertDialog? = null
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
-    fun close() { closed = true; dialog?.dismiss(); executor.shutdownNow() }
+    fun close() { closed = true; mobileBanner.close(); dialog?.dismiss(); executor.shutdownNow() }
     fun refresh(done: () -> Unit) {
         if (closed || loading) return
         loading = true
@@ -73,6 +76,7 @@ class AppExtras(private val activity: Activity) {
     }
     fun panel(title: String, build: (LinearLayout, () -> Unit) -> Unit) {
         dialog?.dismiss()
+        mobileBanner.detach()
         val body = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12)) }
         val header = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
         header.addView(label(title, 20f), LinearLayout.LayoutParams(0, -2, 1f))
@@ -84,11 +88,27 @@ class AppExtras(private val activity: Activity) {
         val current = AlertDialog.Builder(activity).setView(body).create()
         dialog = current
         build(content) { current.dismiss() }
-        current.setOnDismissListener { if (dialog === current) dialog = null }
+        current.setOnDismissListener { if (dialog === current) { mobileBanner.detach(); dialog = null } }
         current.show()
         current.window?.apply {
             setBackgroundDrawable(GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(Color.rgb(12, 17, 25)) })
             setLayout(minOf(dp(460), activity.resources.displayMetrics.widthPixels - dp(32)), minOf(dp(520), activity.resources.displayMetrics.heightPixels - dp(32)))
+        }
+    }
+    fun addAdMob(content: LinearLayout) {
+        val settings = config.optJSONObject("admob") ?: return
+        val privacy = button("Ad privacy options") { mobileBanner.showPrivacy() }
+        content.addView(privacy, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
+        val container = FrameLayout(activity).apply { setPadding(0, dp(20), 0, dp(20)) }
+        content.addView(container, LinearLayout.LayoutParams(-1, -2))
+        mobileBanner.attach(container, privacy, settings)
+    }
+    fun showSports() {
+        panel("Live sports · official services") { content, dismiss ->
+            content.addView(label("The providers update live events on their own sites. Sign in or subscribe there when required."))
+            content.addView(button("Tapmad · sports ↗") { dismiss(); openUrl("https://www.tapmad.com/sports") })
+            content.addView(button("Tapmad · live TV ↗") { dismiss(); openUrl("https://www.tapmad.com/live") })
+            content.addView(button("FanCode · live events ↗") { dismiss(); openUrl("https://www.fancode.com/liveevents") })
         }
     }
     fun showDonation() {
