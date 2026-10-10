@@ -480,10 +480,10 @@ class MainActivity : AppCompatActivity() {
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                2_500,
                 10_000,
-                500,
-                1_000
+                30_000,
+                1_500,
+                3_000
             )
             .build()
 
