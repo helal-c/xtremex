@@ -1,8 +1,8 @@
 {
-  "versionName": "1.1.3",
-  "versionCode": 5,
-  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.3/XtremeX-TV-v1.1.3.apk",
-  "sha256": "446fccc326782aa84b4231d914d02fb6cbb18bf9941b7d0c2d44daf828e6e15a",
-  "notes": "Compact player controls and redesigned settings with Admin panel shortcut. Support for optional bKash/Nagad donation QR and per-user Free/Premium sponsor controls. Donation and sponsor features require the upgraded admin/API deployment; disabled by default. Screen preferences are preserved.",
+  "versionName": "1.1.4",
+  "versionCode": 6,
+  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.4/XtremeX-TV-v1.1.4.apk",
+  "sha256": "624ef786182ac75d6549eb39002d3828861841128d1ad8267d5a94c7e73b04e3",
+  "notes": "Mobile AdMob support for Free users, owner controls, and Tapmad/FanCode official live sports links.",
   "mandatory": false
 }
