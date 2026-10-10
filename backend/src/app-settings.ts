@@ -1,8 +1,9 @@
 import { PNG } from 'pngjs';
 import jpeg from 'jpeg-js';
 export type PaymentMethod = {number:string;qr:string};
-export type AppSettings = {donation:{enabled:boolean;message:string;bkash:PaymentMethod;nagad:PaymentMethod};ads:{enabled:boolean;title:string;message:string;url:string}};
-export function defaultAppSettings(): AppSettings { return {donation:{enabled:false,message:'Support XtremeX TV. Donations are optional.',bkash:{number:'',qr:''},nagad:{number:'',qr:''}},ads:{enabled:false,title:'',message:'',url:''}}; }
+export type AdMobSettings = {enabled:boolean;testMode:boolean;appId:string;bannerUnitId:string};
+export type AppSettings = {admob:AdMobSettings;donation:{enabled:boolean;message:string;bkash:PaymentMethod;nagad:PaymentMethod};ads:{enabled:boolean;title:string;message:string;url:string}};
+export function defaultAppSettings(): AppSettings { return {admob:{enabled:false,testMode:true,appId:'',bannerUnitId:''},donation:{enabled:false,message:'Support XtremeX TV. Donations are optional.',bkash:{number:'',qr:''},nagad:{number:'',qr:''}},ads:{enabled:false,title:'',message:'',url:''}}; }
 function text(value:unknown,max:number):string { if(typeof value!=='string'||value.length>max) throw new Error('Invalid text');return value.trim(); }
 function method(value:any):PaymentMethod {
   if(!value||typeof value!=='object')throw new Error('Invalid payment method');
@@ -30,6 +31,14 @@ export function validateAppSettings(value:any):AppSettings {
   if(donation.enabled&&!donation.bkash.number&&!donation.bkash.qr&&!donation.nagad.number&&!donation.nagad.qr)throw new Error('Add a donation number or QR');
   const ads={enabled:value.ads.enabled,title:text(value.ads.title,80),message:text(value.ads.message,240),url:text(value.ads.url,1000)};
   if(ads.url){const u=new URL(ads.url);if(u.protocol!=='https:'||u.username||u.password)throw new Error('HTTPS URL required');}
-  if(ads.enabled&&!ads.title)throw new Error('Sponsor title required');return {donation,ads};
+  if(ads.enabled&&!ads.title)throw new Error('Sponsor title required');
+  const raw=value.admob===undefined?{enabled:false,testMode:true,appId:'',bannerUnitId:''}:value.admob;
+  if(!raw||typeof raw.enabled!=='boolean'||typeof raw.testMode!=='boolean')throw new Error('Invalid AdMob settings');
+  const admob={enabled:raw.enabled,testMode:raw.testMode,appId:text(raw.appId,80),bannerUnitId:text(raw.bannerUnitId,80)};
+  const app=admob.appId.match(/^ca-app-pub-([0-9]{16})~[0-9]{10}$/);
+  const banner=admob.bannerUnitId.match(/^ca-app-pub-([0-9]{16})\/[0-9]{10}$/);
+  if(admob.appId&&!app||admob.bannerUnitId&&!banner)throw new Error('Invalid AdMob ID');
+  if(admob.enabled&&!admob.testMode&&(!app||!banner||app[1]!==banner[1]||app[1]==='3940256099942544'))throw new Error('Live AdMob needs matching real App and Banner IDs');
+  return {donation,ads,admob};
 }
 export function publicAppSettings(value:unknown):AppSettings { return validateAppSettings(value); }

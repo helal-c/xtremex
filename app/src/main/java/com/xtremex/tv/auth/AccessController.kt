@@ -101,7 +101,7 @@ class AccessController(context: Context, private val deviceType: String,
     }
     private fun publish() {
         val allowed = canPlay()
-        val signature = "${lease.state}:$support:$allowed"
+        val signature = "${lease.state}:$support:$allowed:$adsAllowed"
         if (signature == previous) return
         previous = signature; changed(lease.state, support, allowed)
     }

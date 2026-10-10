@@ -47,6 +47,7 @@ async function settings(){
   const [d,c]=await Promise.all([api('settings'),api('app-settings')]);$('support').value=d.supportNumber;appConfig=c;
   $('donation-enabled').checked=c.donation.enabled;$('donation-message').value=c.donation.message;
   for(const name of ['bkash','nagad']){$(name+'-number').value=c.donation[name].number;$(name+'-qr').value='';previewQr(name);}
+  $('admob-enabled').checked=c.admob.enabled;$('admob-test').checked=c.admob.testMode;$('admob-app').value=c.admob.appId;$('admob-banner').value=c.admob.bannerUnitId;
   $('ads-enabled').checked=c.ads.enabled;for(const k of ['title','message','url'])$('ads-'+k).value=c.ads[k];
 }
 function previewQr(name){const img=$(name+'-preview');const qr=appConfig?.donation[name].qr||'';img.hidden=!qr;if(qr)img.src=qr;else img.removeAttribute('src');}
@@ -78,10 +79,12 @@ async function saveAppConfig(e,section){e.preventDefault();if(!appConfig)return;
     // Read the latest other section so saving donation does not overwrite sponsor changes.
     const latest=await api('app-settings');
     if(section==='donation')latest.donation={enabled:$('donation-enabled').checked,message:$('donation-message').value,bkash:{number:$('bkash-number').value,qr:appConfig.donation.bkash.qr},nagad:{number:$('nagad-number').value,qr:appConfig.donation.nagad.qr}};
+    else if(section==='admob')latest.admob={enabled:$('admob-enabled').checked,testMode:$('admob-test').checked,appId:$('admob-app').value,bannerUnitId:$('admob-banner').value};
     else latest.ads={enabled:$('ads-enabled').checked,title:$('ads-title').value,message:$('ads-message').value,url:$('ads-url').value};
     await api('app-settings','PATCH',latest);appConfig[section]=latest[section];notify('Saved. Apps load the new settings when Settings opens.');
   }catch(error){notify(error.message+' — check numbers, QR images and HTTPS links.');}finally{e.submitter.disabled=false;}
 }
 $('donation-form').addEventListener('submit',e=>saveAppConfig(e,'donation'));
+$('admob-form').addEventListener('submit',e=>saveAppConfig(e,'admob'));
 $('ads-form').addEventListener('submit',e=>saveAppConfig(e,'ads'));
 refresh();setInterval(()=>{if(!$('panel').hidden&&activeTab!=='settings'&&!document.hidden)refresh();},15000);
