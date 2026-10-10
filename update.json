@@ -1,8 +1,8 @@
 {
-  "versionName": "1.1.4",
-  "versionCode": 6,
-  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.4/XtremeX-TV-v1.1.4.apk",
-  "sha256": "624ef786182ac75d6549eb39002d3828861841128d1ad8267d5a94c7e73b04e3",
-  "notes": "Mobile AdMob support for Free users, owner controls, and Tapmad/FanCode official live sports links.",
+  "versionName": "1.1.5",
+  "versionCode": 7,
+  "apkUrl": "https://github.com/helal-c/xtremex/releases/download/v1.1.5/XtremeX-TV-v1.1.5.apk",
+  "sha256": "815a553a563937a32fd2058997a8a3f77ae4ea474f4e5b43fddf651cdf9acd6c",
+  "notes": "Improved live TV buffering on intermittent networks.",
   "mandatory": false
 }
